@@ -1,0 +1,5578 @@
+
+PANG_VERSION=
+ISO_VERSION=
+mes_box="${ISO_VERSION}-$PANG_VERSION"
+
+#F Common parameters in all functions
+#F W   WARNING
+#F E   ERROR
+#F A   ALERT
+#F O   OK
+#F N   Do not print any message (for internal use)
+#F e   In case of error or warning exit
+#F r   Print to Report File too
+#F h   Print to Report File only
+#F j   Print new line before message
+#F J   Do not print new line after message
+#F f   Disable flag WARNING or ERROR 
+#F int  Print ERROR for incorrect function parameters (for internal use)
+#F a   Print to screen Log File Report File
+#F s   Print to screen 
+#F r   Print to Report File
+#F l   Print to Log File
+#F f   Disable flag WARNING or ERROR
+#F t   For meta characters 'set -f'
+#F q   quite mode
+#F S   Print result to log in case of error only (for example opening tar file)
+
+# Clear screen
+
+[ "X$NO_CLEAR" = "X" ] || clear
+
+skip_to_anacondastart_line_script="\nRun SCRIPT ============= $0 ====================\n"
+echo -e $start_line_script
+
+# In case that script is run by other script
+# For running with the same Log File add parameter internal
+
+internalFlag=0
+[ "X$1" = "Xinternal" ] && { internalFlag=1 ; shift ; }
+
+#V
+#VARIABLES
+#V======================================================================
+#V----------------------------------------------------------------------
+#V LOG NAME
+#V
+#V           Default log name +  path '/tmp/$_scriptName.log'
+#V LOG_PATH  Full path with log name Exp. /home/log/install.log
+#V LOG_DIR   Log directory with default log name log Exp. /home/log
+#V LOG       Log name with default directory Exp. install.log
+#V
+#V OVERWRITE LOG FILE
+#V
+#V Delete log file before run script
+#V Default every running is overwrite log file
+#V Default for overwrite log  NO_OVERWRITE_LOG_FLAG=
+#V For no overwrite           NO_OVERWRITE_LOG_FLAG=1 
+#V
+#V----------------------------------------------------------------------
+#V REPORT NAME
+#V
+#V              Default report name +  path '/tmp/$_scriptName.report.`date +%m_%d_%y_%T`'
+#V REPORT_FLAG  Report file is the default
+#V REPORT_PATH  Full path with report name Exp. /home/log/system.report
+#V REPORT_DIR   Report directory with default report name Exp. /home/reportdir
+#V REPORT       Log name with default directory Exp. install.report
+#V
+#V----------------------------------------------------------------------
+#V
+#V USER THAT CAN RUN THIS SCRIPT
+#V
+#V Default root
+#V RUN_BY_USER=      Run by root
+#V RUN_BY_USER=dbs   Run by spcific user
+#V RUN_BY_USER=any   Run by any user
+#V
+#V----------------------------------------------------------------------
+#V
+#V Don't show exit message on ERROR and WARRNING
+#V Message appears in at end of running
+#V
+#V Default for show message at end of running  NO_MESSAGE_EXIT_FLAG=0
+#V Don't show message at end of running        NO_MESSAGE_EXIT_FLAG=1
+#V
+#V----------------------------------------------------------------------
+#V
+#V CHECK TYPE MACHINE   $_sMACHINE
+#V Type machine for running command which independet on station type
+#V
+#V Default for type machine $_sMACHINE
+#V Default for $_sMACHINE    MACHINE_TYPE_FLAG=0
+#V Don't check type machine  MACHINE_TYPE_FLAG=1
+#V
+#V----------------------------------------------------------------------
+#V
+#V  For exit without messages
+#V _quitModeFlag=1
+#V
+#V----------------------------------------------------------------------
+#V
+#V Don't Check number of process
+#V Default check it mean that CHECK_ONE_PROCESS= or doesn't exist 
+#V
+#V CHECK_ONE_PROCESS=NO  
+#V Define number of processes for on running 
+#V default is 1 
+#V ONE_PROCESS_NUMBER=1
+#V
+#V LOCAL VARIABLES
+
+#V
+#V Temp files
+#V
+
+#V one_process
+_one_process=/tmp/one_process.$$
+
+#V insert_2_file
+_insert_2_file=/tmp/insert_2_file.$$
+
+#V get_line
+_get_line=/tmp/get_line.$$
+
+#V remote_com
+_remote_com=/tmp/remote_com.$$
+
+#V remote_copy
+_remote_copy=/tmp/remote_copy.$$/
+
+#V get_remote_local_address
+_get_remote_local_address=/tmp/get_remote_local_address.$$
+
+#V get_lines_conf
+_get_lines_conf=/tmp/get_lines_conf.$$
+
+#V For replace_str 
+_replace_str=/tmp/replace_str.$$
+
+#V For function headre 
+_function_header_file=/tmp/function_header_file.$$
+
+[ "X$BASE" = "X" ] && BASE=$0
+_scriptName=`basename $BASE`
+
+temp_env=/tmp/env-pre.sh
+env_file=/root/env-pre.sh
+temp_file=/tmp/temp_f
+nic_dir=/etc/sysconfig/network-scripts
+temp=/tmp/temp_file_0_
+temp1=/tmp/temp_file_1_
+temp2=/tmp/temp_file_2_
+
+DIR_NIC=/sys/class/net
+MegaCli=/opt/utils/MegaCli64
+
+VD=/vd
+SSD_GB='[5-9][0-9][0-9].[0-9]* G'
+
+REPO=/run/install/repo
+LD_LIBRARY_PATH=$REPO/utils
+LSPCI=$LD_LIBRARY_PATH/lspci
+
+#V
+#V---------------------------------------------------------------------- 
+#V FILE IN SYSTEM
+
+_FSTAB=/etc/fstab
+_HOSTS=/etc/hosts
+_PASSWD=/etc/passwd
+_SHADOW=/etc/shadow
+
+#V
+#V----------------------------------------------------------------------
+#V
+
+#V
+#V Flag that you get to end of script ( exitScriptFlag=1 in the script)
+exitScriptFlag=0
+
+#V
+#V Flag for status
+_errorFlag=0
+_warningFlag=0
+_okFlag=0
+
+if [ $internalFlag = 1 ]
+then
+ _quitModeFlag=1
+else
+ _quitModeFlag=0
+ export ERROR_FLAG WARNING_FLAG OK_FLAG
+fi
+
+#V
+#V Flag
+_WarErrFlaG=/tmp/WarErrFlaG.$$
+
+#V display
+# error file for loop while and for
+# /tmp/error.flag file for PHP to check error
+
+exitError=/tmp/script_errorFlag
+export exitError
+[[ -e $exitError ]] && last_error_exit=1 || last_error_exit=0
+rm -rf $exitError
+
+#V Prameters in function
+_firstPar="First parameter is wrong in function"
+_secondPar="Second parameter is wrong in function"
+_thirdPar="Third parameter is wrong in function"
+_fourthPar="Fourth parameter is wrong in function"
+
+#L
+#L LIMITATIONS
+#L ======================================================================
+#L
+#L In sh shell
+#L Command cd <dir name>
+#L In case that directory doesn't exist resault is exit from script
+#L cd no_dir
+#L echo yes
+#L 
+#L You can user function check_dir before cd command
+#L 
+#L check_dir <dir>
+#L run_com -Ee "cd <dir>"
+#L
+
+#=================================================
+
+IFCONFIG=/sbin/ifconfig
+ECHO="/bin/echo -e"
+TR=/usr/bin/tr
+
+_tty=`tty`
+_line="------------------------------------------------------------------------"
+_leqe="========================================================================"
+_lroof="--^^--^^--^^--^^--^^--^^--^^--^^--^^--^^--^^--^^--^^--^^--^^--^^--^^--^^"
+
+##### Check which user can run it
+
+[[ "X$RUN_BY_USER" = "X" ]] && RUN_BY_USER=root
+
+if [[ "X$RUN_BY_USER" != "Xany" ]]; then
+  ( id | grep $RUN_BY_USER 1>/dev/null 2>&1 ) ||\
+   { $ECHO "\n\t***ERROR: You must be $RUN_BY_USER for running this program\n"; exit 1; }
+fi
+export RUN_BY_USER
+
+# COLORS
+#________________________________________________________________________
+#green='\e[92m'
+#yellow='\e[93m'
+#red='\e[91m'
+#magenta='\e[95m'
+#blue='\e[94m'
+#perpel='\e[170m'
+#end_color='\e[0m'
+
+green=
+yellow=
+red=
+magenta=
+blue=
+perpel=
+end_color=
+
+#FUN
+#FUN GLOBAL FUNCTIONS
+#FUN________________________________________________________________________
+#FUN
+
+#F
+#FUNCTION display
+#F 
+#F Usage: display -{E|W|A|O|N|int}[erfhjJ] ["massage to print"]
+#F
+#F Print WARNING/ERROR/OK  message with option to exit from script,
+#F message will be printed to screen and Log File, or to Report File, or to all three
+#F 
+#F $1  -{E|W|O|N|int}[eslrefbBjJ]
+#F W   WARNING
+#F E   ERROR
+#F A   ALERT
+#F O   OK
+#F N   Do not print any message (for internal use)
+#F a   Print to screen log report File
+#F l   Print to log
+#F r   Print to report file
+#F s   Print to screen 
+#F j   Print new line before message
+#F J   Do not print new line after message
+#F f   Disable flag WARNING or ERROR 
+#F int  Print ERROR for incorrect function parameters (for internal use)
+#F
+#F $2  Message for printing
+#F 
+#F EXAMPLES:
+#F display -E "Wrong result from partition table"
+#F display -W "Fail to print"
+#F display -Ee "File '/home/user/list' doesn't exist"
+#F display -Wf "While removing lines in file '/etc/passwd'"
+#F display -Wr "File doesn't exist"
+#F display -O "Print succsses"
+#F display -Oh "Print succsses"
+#F display -Oj "Print succsses"
+#F display -OJ "Print succsses"
+#F display -OjJ "Print succsses"
+#F
+
+display()
+{
+	diE_errWar=$1
+	sleep_count=
+	if [[ `echo $2 | grep -c "sleep "` = 1 ]]; then
+		sleep_count=`echo $2 | awk '{print $2}'`
+		shift
+	fi
+	diE_mesg=$2
+	
+	if [[ "X$diE_mesg" = X ]]; then
+		$ECHO "Parameter is missing in function 'display'"
+	fi
+
+	diE_mode=
+	diE_report=
+	diE_newLine=
+	diE_endLine='\n'
+
+	diE_exitFlag=0
+	diE_errorFlag=0
+	diE_loopFlag=0
+
+	# O need to be first 
+
+	( echo "X$diE_errWar" | grep N   1>/dev/null 2>&1 ) && return
+	( echo "X$diE_errWar" | grep O   1>/dev/null 2>&1 ) && diE_mode='   OK'
+	( echo "X$diE_errWar" | grep W   1>/dev/null 2>&1 ) && diE_mode='***WARNING'
+	( echo "X$diE_errWar" | grep E   1>/dev/null 2>&1 ) && diE_mode='***ERROR'
+	( echo "X$diE_errWar" | grep A   1>/dev/null 2>&1 ) && diE_mode='***ATTENTION'
+	( echo "X$diE_errWar" | grep int 1>/dev/null 2>&1 ) && { diE_mode='***INTERNAL ERROR'; diE_exitFlag=1; }
+
+	[[ "X$diE_mode" = "X" ]] && { $ECHO "$red***INTERNAL ERROR: $_firstPar 'display'\n'display $*'" | tee -a $LOG; exit 1; }
+
+	diE_logFlag=1
+	( echo "X$diE_errWar" | grep a 1>/dev/null 2>&1 ) && diE_report_log_screenFlag=1
+	( echo "X$diE_errWar" | grep s 1>/dev/null 2>&1 ) && diE_screenFlag=1
+	( echo "X$diE_errWar" | grep r 1>/dev/null 2>&1 ) && diE_reportFlag=1
+	( echo "X$diE_errWar" | grep e 1>/dev/null 2>&1 ) && diE_exitFlag=1
+	( echo "X$diE_errWar" | grep j 1>/dev/null 2>&1 ) && diE_newLine='\n'
+	( echo "X$diE_errWar" | grep J 1>/dev/null 2>&1 ) && diE_endLine=
+	( echo "X$diE_errWar" | grep f 1>/dev/null 2>&1 ) && diE_errorFlag=1
+	( echo "X$diE_errWar" | grep L 1>/dev/null 2>&1 ) && diE_loopFlag=1
+
+	# Update WARNING ERROR flag at exit from script
+
+	if [[ $diE_errorFlag = 0 ]];then
+		case $diE_mode in
+			'***WARNING')
+				_warningFlag=1
+				echo WARNING_FLAG=1 >> $_WarErrFlaG
+				;;
+			'***ERROR' | '***INTERNAL ERROR')
+				_errorFlag=1
+				echo ERROR_FLAG=1 >> $_WarErrFlaG
+				;;
+		esac
+	fi
+
+	( echo "X$diE_errWar" | grep O   1>/dev/null 2>&1 ) && diE_color=$green
+	( echo "X$diE_errWar" | grep W   1>/dev/null 2>&1 ) && diE_color=$yellow
+	( echo "X$diE_errWar" | grep E   1>/dev/null 2>&1 ) && diE_color=$red
+	( echo "X$diE_errWar" | grep A   1>/dev/null 2>&1 ) && diE_color=$magenta
+	
+	[[ "X$diE_reportFile" = "X-r" ]] && diE_report=-r
+
+	echo_log $diE_report "$diE_newLine$diE_color$diE_mode: $diE_mesg$diE_endLine$end_color"
+	[[ -n $sleep_count ]] && sleep $sleep_count
+	[[ -n $sleep_count ]] && echo "sleep $sleep_count" >> $LOG
+	if [[ $diE_exitFlag = 1 ]]; then
+		touch $exitError 1>/dev/null 2>&1
+		end_display
+		exit 1
+	fi
+} 
+
+#F
+#FUNCTION display_if
+#F 
+#F Usage: display_if -{E|W|A|O|N|int}[erfhjJ] ["massage to print"]
+#F
+#F Print WARNING/ERROR/OK  message with option to exit from script,
+#F message will be printed to screen and Log File, or to Report File, or to all three
+#F 
+#F $1  -{E|W|O|N|int}[eslrefbBjJ]
+#F W   WARNING
+#F E   ERROR
+#F A   ALERT
+#F O   OK
+#F N   Do not print any message (for internal use)
+#F a   Print to screen log report File
+#F l   Print to log
+#F r   Print to report file
+#F s   Print to screen 
+#F j   Print new line before message
+#F J   Do not print new line after message
+#F f   Disable flag WARNING or ERROR 
+#F int  Print ERROR for incorrect function parameters (for internal use)
+#F
+#F $2  Message for printing
+#F 
+#F EXAMPLES:
+#F display_if -E "a = b" "Wrong result from partition table"
+#F display_if -W "Fail to print"
+#F display_if -Ee "File '/home/user/list' doesn't exist"
+#F display_if -Wf "While removing lines in file '/etc/passwd'"
+#F display_if -Wr "File doesn't exist"
+#F display_if -O "Print succsses"
+#F display_if -Oh "Print succsses"
+#F display_if -Oj "Print succsses"
+#F display_if -OJ "Print succsses"
+#F display_if -OjJ "Print succsses"
+#F
+
+display_if()
+{
+	dfE_errWar=$1
+	sleep_count=
+	if [[ `echo $2 | grep -c "sleep "` = 1 ]]; then
+		sleep_count=`echo $2 | awk '{print $2}'`
+		shift
+	fi
+	dfE_condition=$2
+	dfE_mesg=$3
+
+	if [[ "X$dfE_mesg" = X || "X$dfE_condition" = X ]]; then
+		$ECHO "Parameter is missing in function 'display_if'"
+	fi
+
+	eval "[[ $dfE_condition ]]" 1>>$LOG 2>&1
+ 	dfE_result_condition=$?
+
+	$ECHO "display_if(): '[[ $dfE_condition ]]'" >> $LOG
+	
+	[[ $dfE_result_condition != 0 ]] && return
+
+	dfE_mode=
+	dfE_report=
+	dfE_newLine=
+	dfE_endLine='\n'
+
+	dfE_exitFlag=0
+	dfE_errorFlag=0
+	dfE_loopFlag=0
+
+	# O need to be first 
+
+	( echo "X$dfE_errWar" | grep N   1>/dev/null 2>&1 ) && return
+	( echo "X$dfE_errWar" | grep O   1>/dev/null 2>&1 ) && dfE_mode='   OK'
+	( echo "X$dfE_errWar" | grep W   1>/dev/null 2>&1 ) && dfE_mode='***WARNING'
+	( echo "X$dfE_errWar" | grep E   1>/dev/null 2>&1 ) && dfE_mode='***ERROR'
+	( echo "X$dfE_errWar" | grep A   1>/dev/null 2>&1 ) && dfE_mode='***ATTENTION'
+	( echo "X$dfE_errWar" | grep int 1>/dev/null 2>&1 ) && { dfE_mode='***INTERNAL ERROR'; dfE_exitFlag=1; }
+
+	[[ "X$dfE_mode" = "X" ]] && { $ECHO "$red***INTERNAL ERROR: $_firstPar 'display_if'\n'display_if $*'" | tee -a $LOG; exit 1; }
+
+	dfE_logFlag=1
+	( echo "X$dfE_errWar" | grep a 1>/dev/null 2>&1 ) && dfE_report_log_screenFlag=1
+	( echo "X$dfE_errWar" | grep s 1>/dev/null 2>&1 ) && dfE_screenFlag=1
+	( echo "X$dfE_errWar" | grep r 1>/dev/null 2>&1 ) && dfE_reportFlag=1
+	( echo "X$dfE_errWar" | grep e 1>/dev/null 2>&1 ) && dfE_exitFlag=1
+	( echo "X$dfE_errWar" | grep j 1>/dev/null 2>&1 ) && dfE_newLine='\n'
+	( echo "X$dfE_errWar" | grep J 1>/dev/null 2>&1 ) && dfE_endLine=
+	( echo "X$dfE_errWar" | grep f 1>/dev/null 2>&1 ) && dfE_errorFlag=1
+	( echo "X$dfE_errWar" | grep L 1>/dev/null 2>&1 ) && dfE_loopFlag=1
+
+	# Update WARNING ERROR flag at exit from script
+
+	if [[ $dfE_errorFlag = 0 ]];then
+		case $dfE_mode in
+			'***WARNING')
+				_warningFlag=1
+				echo WARNING_FLAG=1 >> $_WarErrFlaG
+				;;
+			'***ERROR' | '***INTERNAL ERROR')
+				_errorFlag=1
+				echo ERROR_FLAG=1 >> $_WarErrFlaG
+				;;
+		esac
+	fi
+
+	( echo "X$dfE_errWar" | grep O   1>/dev/null 2>&1 ) && dfE_color=$green
+	( echo "X$dfE_errWar" | grep W   1>/dev/null 2>&1 ) && dfE_color=$yellow
+	( echo "X$dfE_errWar" | grep E   1>/dev/null 2>&1 ) && dfE_color=$red
+	( echo "X$dfE_errWar" | grep A   1>/dev/null 2>&1 ) && dfE_color=$magenta
+	
+	[[ "X$dfE_reportFile" = "X-r" ]] && dfE_report=-r
+
+	echo_log $dfE_report "$dfE_newLine$dfE_color$dfE_mode: $dfE_mesg$dfE_endLine$end_color"
+	[[ -n $sleep_count ]] && sleep $sleep_count
+	[[ -n $sleep_count ]] && echo "sleep $sleep_count" >> $LOG
+	
+	if [[ $dfE_exitFlag = 1 ]]; then
+		touch $exitError 1>/dev/null 2>&1
+		end_display
+		exit 1
+	fi
+}
+
+#F
+#FUNCTION display_if_not
+#F 
+#F Usage: display_if_not -{E|W|A|O|N|int}[erfhjJ] ["massage to print"]
+#F
+#F Print WARNING/ERROR/OK  message with option to exit from script,
+#F message will be printed to screen and Log File, or to Report File, or to all three
+#F 
+#F $1  -{E|W|O|N|int}[eslrefbBjJ]
+#F W   WARNING
+#F E   ERROR
+#F A   ALERT
+#F O   OK
+#F N   Do not print any message (for internal use)
+#F a   Print to screen log report File
+#F l   Print to log
+#F r   Print to report file
+#F s   Print to screen 
+#F j   Print new line before message
+#F J   Do not print new line after message
+#F f   Disable flag WARNING or ERROR 
+#F int  Print ERROR for incorrect function parameters (for internal use)
+#F
+#F $2  Message for printing
+#F 
+#F EXAMPLES:
+#F display_if_not -E "a = b" "Wrong result from partition table"
+#F display_if_not -W "Fail to print"
+#F display_if_not -Ee "File '/home/user/list' doesn't exist"
+#F display_if_not -Wf "While removing lines in file '/etc/passwd'"
+#F display_if_not -Wr "File doesn't exist"
+#F display_if_not -O "Print succsses"
+#F display_if_not -Oh "Print succsses"
+#F display_if_not -Oj "Print succsses"
+#F display_if_not -OJ "Print succsses"
+#F display_if_not -OjJ "Print succsses"
+#F
+
+display_if_not()
+{
+	dnE_errWar=$1
+	dnE_condition=$2
+	dnE_mesg=$3
+
+	if [[ "X$dnE_mesg" = X || "X$dnE_condition" = X ]]; then
+		$ECHO "Parameter is missing in function 'display_if_not'"
+	fi
+
+	eval "[[ $dnE_condition ]]" 1>>$LOG 2>&1
+ 	dnE_result_condition=$?
+
+	$ECHO "display_if_not(): '[[ $dnE_condition ]]'" >> $LOG
+	
+	[[ $dnE_result_condition = 0 ]] && return
+	
+	dnE_mode=
+	dnE_report=
+	dnE_newLine=
+	dnE_endLine='\n'
+
+	dnE_exitFlag=0
+	dnE_errorFlag=0
+	dnE_loopFlag=0
+
+	# O need to be first 
+
+	( echo "X$dnE_errWar" | grep N   1>/dev/null 2>&1 ) && return
+	( echo "X$dnE_errWar" | grep O   1>/dev/null 2>&1 ) && dnE_mode='   OK'
+	( echo "X$dnE_errWar" | grep W   1>/dev/null 2>&1 ) && dnE_mode='***WARNING'
+	( echo "X$dnE_errWar" | grep E   1>/dev/null 2>&1 ) && dnE_mode='***ERROR'
+	( echo "X$dnE_errWar" | grep A   1>/dev/null 2>&1 ) && dnE_mode='***ATTENTION'
+	( echo "X$dnE_errWar" | grep int 1>/dev/null 2>&1 ) && { dnE_mode='***INTERNAL ERROR'; dnE_exitFlag=1; }
+
+	[[ "X$dnE_mode" = "X" ]] && { $ECHO "$red***INTERNAL ERROR: $_firstPar 'display_if_not'\n'display_if_not $*'" | tee -a $LOG; exit 1; }
+
+	dnE_logFlag=1
+	( echo "X$dnE_errWar" | grep a 1>/dev/null 2>&1 ) && dnE_report_log_screenFlag=1
+	( echo "X$dnE_errWar" | grep s 1>/dev/null 2>&1 ) && dnE_screenFlag=1
+	( echo "X$dnE_errWar" | grep r 1>/dev/null 2>&1 ) && dnE_reportFlag=1
+	( echo "X$dnE_errWar" | grep e 1>/dev/null 2>&1 ) && dnE_exitFlag=1
+	( echo "X$dnE_errWar" | grep j 1>/dev/null 2>&1 ) && dnE_newLine='\n'
+	( echo "X$dnE_errWar" | grep J 1>/dev/null 2>&1 ) && dnE_endLine=
+	( echo "X$dnE_errWar" | grep f 1>/dev/null 2>&1 ) && dnE_errorFlag=1
+	( echo "X$dnE_errWar" | grep L 1>/dev/null 2>&1 ) && dnE_loopFlag=1
+
+	# Update WARNING ERROR flag at exit from script
+
+	if [[ $dnE_errorFlag = 0 ]];then
+		case $dnE_mode in
+			'***WARNING')
+				_warningFlag=1
+				echo WARNING_FLAG=1 >> $_WarErrFlaG
+				;;
+			'***ERROR' | '***INTERNAL ERROR')
+				_errorFlag=1
+				echo ERROR_FLAG=1 >> $_WarErrFlaG
+				;;
+		esac
+	fi
+
+	( echo "X$dnE_errWar" | grep O   1>/dev/null 2>&1 ) && dnE_color=$green
+	( echo "X$dnE_errWar" | grep W   1>/dev/null 2>&1 ) && dnE_color=$yellow
+	( echo "X$dnE_errWar" | grep E   1>/dev/null 2>&1 ) && dnE_color=$red
+	( echo "X$dnE_errWar" | grep A   1>/dev/null 2>&1 ) && dnE_color=$magenta
+	
+	[[ "X$dnE_reportFile" = "X-r" ]] && dnE_report=-r
+
+	echo_log $dnE_report "$dnE_newLine$dnE_color$dnE_mode: $dnE_mesg$dnE_endLine$end_color"
+
+	if [[ $dnE_exitFlag = 1 ]]; then
+		touch $exitError 1>/dev/null 2>&1
+		end_display
+		exit 1
+	fi
+}
+
+end_display()
+{
+:
+}
+
+#F
+#FUNCTION echo_log
+#F
+#F Usage: echo_log [-[F|a|r|s|l]] ["message to print"]
+#F
+#F $1  -[F|a|r|s|l] 
+#F F   Print to function name Must be First
+#F     Default print to screen and Log File
+#F a   Print to screen Log File Report File
+#F s   Print to screen 
+#F r   Print to Report File
+#F l   Print to Log File
+#F
+#F $2  Message to print
+#F
+#F This function use set -f set +f
+#F
+#F EXAMPLES:
+#F echo_log
+#F echo_log -F "function name"
+#F echo_log "Creating file"
+#F echo_log -a "Creating file"
+#F echo_log -s "Creating file"
+#F echo_log -l "Runing script"
+#F echo_log -r "Runing script"
+#F echo_log -lr "Runing script"
+#F
+
+echo_log()
+{
+	ecL_mesg=
+	ecL_screenFlag=0
+	ecL_reportFlag=0
+	ecL_logFlag=0
+	ecL_functionFlag=0
+
+	[ "X$2" != "X" ] && (echo "X$1" | grep F 1>/dev/null 2>&1 ) && ecL_functionFlag=1
+
+	if (echo "X$1" | grep 'X-' | egrep 'a|s|l|r' 1>/dev/null 2>&1 ); then
+		(echo "X$1" | grep l 1>/dev/null 2>&1 ) && ecL_logFlag=1
+		(echo "X$1" | grep s 1>/dev/null 2>&1 ) && ecL_screenFlag=1
+		(echo "X$1" | grep r 1>/dev/null 2>&1 ) && ecL_reportFlag=1
+		(echo "X$1" | grep a 1>/dev/null 2>&1 ) && { ecL_reportFlag=1; ecL_screenFlag=1; ecL_logFlag=1; }
+		shift
+	else
+		ecL_screenFlag=1
+		ecL_logFlag=1
+	fi
+
+	set -f
+	if [ $ecL_functionFlag = 0 ]; then
+		ecL_mesg="$1"
+	else
+		shift
+		ecL_mesg="($fun_name) $1"
+	fi
+
+	[[ $ecL_reportFlag = 1 ]] &&  $ECHO "$ecL_mesg" >>$REPORT
+	[[ $ecL_screenFlag = 1 ]] && $ECHO "$ecL_mesg"
+	$ECHO "$ecL_mesg" >>$LOG
+	set +f
+}
+
+##### LOG file
+
+if [ $internalFlag = 0 ]; then
+	logName=$_scriptName.log
+	logDir=/tmp
+
+	if [ "X$LOG_PATH" != "X" ];then
+		logName=`echo $LOG_PATH | awk -F/ '{print $NF}'`
+		logDir=`echo $LOG_PATH | sed "s/\/$logName//"`
+	elif [ "X$LOG_DIR" != "X" ]; then
+		logDir=$LOG_DIR
+	elif [ "X$LOG" != "X" ]; then
+		logName=$LOG
+	fi
+
+	LOG=$logDir/$logName
+	[ ! -d $logDir ] &&  mkdir -p $logDir 1>/dev/null 2>&1
+	touch $LOG 1>/dev/null 2>&1
+
+	[ ! -f $LOG ] && display -Ee "Cannot create log file '$LOG'"
+	[ "X$NO_OVERWRITE_LOG_FLAG" != "X1" ] && cat /dev/null >$LOG
+
+	export LOG
+
+	[[ -s $LOG ]] && log_first_time=1 || log_first_time=0
+fi
+log_condition=/tmp/log_condition
+
+#F
+#FUNCTION check_result
+#F
+#F Usage: check_result -{E|W|EO|WO|O|N}[ealqsrcfjJ] "message"
+#F
+#F Define variable
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealqsrcfjJ]
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F O   OK
+#F e   In case of error or warning exit
+#F a   Print to screen Log File Report File
+#F s   Print to screen
+#F l   Print to Log File
+#F j   Print new line before message
+#F J   Do not print new line after message
+#F f   Disable flag WARNING or ERROR
+#F
+#F $2  Result number
+#F
+#F EXAMPLES:
+#F check_result -N $?
+#F check_result -Ee $? "message"
+#F
+
+check_result()
+{
+	_fun=check_result
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealscfjJ $1
+	check_input_para $2
+	
+	if [[ "X$3" = "X-R" ]]; then
+		cre_return_code_options=$3
+		cre_print_message=$4
+	else
+		cre_return_code_options=
+		cre_print_message=$3
+	fi
+	
+	cre_error=$1
+	cre_result=$2
+	
+	echo_log -l "\nRETURN CODE: '$cre_result'\n"
+	
+	if [[ -n $cre_return_code ]]; then 
+
+		echo_log -l "RETURN CODE FOR LAST COMMAND CAN BE: '$cre_return_code_options'\n" 
+
+		for cre_r in $cre_return_code_options; do
+			[[ $cre_r = $cre_result ]] && cre_result=0 
+		done
+	fi
+	
+	[[ $error_NFlag = 0 && $cre_result != 0 ]] && display ${cre_error}l "During running command on script"
+}
+
+#F f run_com
+#F ############################################################################
+#F
+#FUNCTION run_com
+#F
+#F Usage: run_com -{E|W|EO|WO|O|N}[ealqsrcfjJ] -R "0 1" command -R "0 1" "Message"
+#F
+#F Define variable
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealqsrcfjJ]
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F O   OK
+#F e   In case of error or warning exit
+#F c   Check value not null
+#F a   Print to screen Log File Report File
+#F s   Print to screen
+#F r   Print to Report File
+#F l   Print to Log File
+#F p   run show
+#F j   Print new line before message
+#F J   Do not print new line after message
+#F f   Disable flag WARNING or ERROR
+#F
+#F $2  Variable name
+#F
+#F $3  Output command will be the value for the variable
+#F
+#F EXAMPLES:
+#F run_com -N  "systemctl start sshd"
+#F run_com -Ee "cp /etc/ssh/sshd_config.anaconda /etc/ssh/sshd_config"
+#F run_com -Ee "cp -r /run/install/repo/Packages $dir_copy" "Copy RPM's .Please wait"
+#F
+
+run_com()
+{
+	_fun=run_com
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	
+	ruc_error=$1
+	ruc_command=$2
+	if [[ "X$3" = "X-R" ]]; then
+		ruc_return_code=$3
+		ruc_return_code_options=$4
+		ruc_print_message=$5
+	else
+		ruc_return_code=
+		ruc_return_code_options=
+		ruc_print_message=$3
+	fi
+	
+	[[ -n $ruc_print_message ]] && echo "$ruc_print_message" | tee -a $LOG
+	
+	echo_log -l "RUN COMMAND: '$ruc_command'"
+	echo_log -l "RESULT:\n"
+	
+	eval "$ruc_command"  1>>$LOG 2>&1
+	ruc_result=$?
+	
+	echo_log -l "\nRETURN CODE: '$ruc_result'\n"
+	
+	if [[ -n $ruc_return_code ]]; then 
+
+		echo_log -l "RETURN CODE FOR LAST COMMAND CAN BE: '$ruc_return_code_options'\n" 
+
+		for ruc_r in $ruc_return_code_options; do
+			[[ $ruc_r = $ruc_result ]] && ruc_result=0 
+		done
+	fi
+
+	command_check_result $ruc_result $1 "$ruc_command"
+}
+
+#F
+#FUNCTION run_com_if
+#F
+#F Usage: run_com_if -{E|W|EO|WO|O|N}[ealqsrcfjJ] condition command -R "0 1"
+#F
+#F Define variable
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealqsrcfjJ]
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F O   OK
+#F e   In case of error or warning exit
+#F c   Check value not null
+#F a   Print to screen Log File Report File
+#F s   Print to screen
+#F r   Print to Report File
+#F l   Print to Log File
+#F p   run show
+#F j   Print new line before message
+#F J   Do not print new line after message
+#F f   Disable flag WARNING or ERROR
+#F
+#F $2  Variable name
+#F
+#F $3  Output command will be the value for the variable
+#F
+#F EXAMPLES:
+#F run_com_if -Ee "-d $dir_copy" "rm -rf $dir_copy"
+#F run_com_if -Ee "! -d $out_dir_tar" "mkdir $out_dir_tar" "Create directory" 
+#F
+
+run_com_if()
+{
+	_fun=run_com_if
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	check_input_para $3
+	
+	rci_error=$1
+	rci_condition=$2
+	rci_command=$3
+
+	if [[ "X$4" = "X-R" ]]; then
+		rci_return_code=$4
+		rci_return_code_options=$5
+		rci_print_message=$6
+	else
+		rci_return_code=
+		rci_return_code_options=
+		rci_print_message=$4
+	fi
+	
+	rci_print_message=$4
+	[[ -n $rci_print_message ]] && echo "$rci_print_message" | tee -a $LOG
+	
+	echo_log -l "CHECK CONDITION: [ $rci_condition ]"
+
+	eval "[[ $rci_condition ]]" 1>$log_condition 2>&1
+ 	rci_result_condition=$?
+ 	check_log_condition
+
+	echo_log -l "RETURN CODE FOR CONDITION: '$rci_result_condition'"
+	
+	[[ $rci_result_condition = 0 ]] && rci_run= || rci_run=NOT
+	
+	echo_log -l "\nNext commnd will $rci_run be running '$rci_command'"
+	
+	[[ $rci_result_condition != 0 ]] && return
+
+	echo_log -l "RUN COMMAND: '$rci_command'"
+	echo_log -l "RESULT:\n"
+	
+	eval "$rci_command"  1>>$LOG 2>&1
+	rci_result=$?
+	
+	echo_log -l "\nRETURN CODE: '$rci_result'\n"
+	
+	if [[ -n $rci_return_code ]]; then 
+
+		echo_log -l "RETURN CODE FOR LAST COMMAND CAN BE: '$rci_return_code_options'\n" 
+
+		for rci_r in $rci_return_code_options; do
+			[[ $rci_r = $rci_result ]] && rci_result=0 
+		done
+	fi
+
+	command_check_result $rci_result $1 "$rci_command"
+}
+
+#F
+#FUNCTION run_com_if_not
+#F
+#F Usage: run_com_if_not -{E|W|EO|WO|O|N}[ealqsrcfjJ] condition command -R "0 1"
+#F
+#F Define variable
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealqsrcfjJ]
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F O   OK
+#F e   In case of error or warning exit
+#F c   Check value not null
+#F a   Print to screen Log File Report File
+#F s   Print to screen
+#F r   Print to Report File
+#F l   Print to Log File
+#F p   run show
+#F j   Print new line before message
+#F J   Do not print new line after message
+#F f   Disable flag WARNING or ERROR
+#F
+#F $2  Variable name
+#F
+#F $3  Output command will be the value for the variable
+#F
+#F EXAMPLES:
+#F run_com_if_not -Ee "-d $guest_dir" "mkdir $guest_dir"
+#F run_com_if_not -Ee "${HPSSACLI} ctrl all show" "raid_controller_not_found" 
+#F run_com_if_not -Ee "${HPSSACLI} ctrl all show" "function" 
+#F
+
+run_com_if_not()
+{
+	_fun=run_com_if_not
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	
+	rcn_error=$1
+	rcn_condition=$2
+	rcn_command=$3
+	rcn_return_code=$4
+	rcn_return_code_options=$5
+	
+	echo_log -l "CHECK CONDITION: [ $rcn_condition ]"
+
+	eval "[[ $rcn_condition ]]" 1>$log_condition 2>&1
+ 	rcn_result_condition=$?
+	check_log_condition
+ 	
+	echo_log -l "RETURN CODE FOR CONDITION: '$rcn_result_condition'"
+	
+	[[ $rcn_result_condition = 0 ]] && rcn_run=NOT || rcn_run=
+	echo_log -l "\nNext commnd will $rcn_run be running '$rcn_command'"
+	
+	[[ $rcn_result_condition = 0 ]] && return
+
+	echo_log -l "RUN COMMAND: '$rcn_command'"
+	echo_log -l "RESULT:\n"
+	
+	eval "$rcn_command"  1>>$LOG 2>&1
+	rcn_result=$?
+	
+	echo_log -l "\nRETURN CODE: '$rcn_result'\n"
+	
+	if [[ -n $rcn_return_code ]]; then 
+
+		echo_log -l "RETURN CODE FOR LAST COMMAND CAN BE: '$rcn_return_code_options'\n" 
+
+		for rcn_r in $rcn_return_code_options; do
+			[[ $rcn_r = $rcn_result ]] && rcn_result=0 
+		done
+	fi
+
+	command_check_result $rcn_result $1 "$rcn_command"
+}
+
+#F
+#FUNCTION run_com_if_else
+#F
+#F Usage: run_com_if_else -{E|W|EO|WO|O|N}[ealqsrcfjJ] condition true_command false_command -R "0 1"
+#F
+#F Define variable
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealqsrcfjJ]
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F O   OK
+#F e   In case of error or warning exit
+#F c   Check value not null
+#F a   Print to screen Log File Report File
+#F s   Print to screen
+#F r   Print to Report File
+#F l   Print to Log File
+#F p   run show
+#F j   Print new line before message
+#F J   Do not print new line after message
+#F f   Disable flag WARNING or ERROR
+#F
+#F $2  Variable name
+#F
+#F $3  Output command will be the value for the variable
+#F
+#F EXAMPLES:
+#F run_com_if_else -Ee "$found = 1" "echo $line | awk '{print \$1" "\$2}' >> $temp" "echo $line >> $temp"
+#F
+
+run_com_if_else()
+{
+	_fun=run_com_if_else
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	
+	rce_error=$1
+	rce_condition=$2
+	rce_true_command=$3
+	rce_false_command=$4
+	rce_return_code=$5
+	rce_return_code_options=$5
+	
+	echo_log -l "CHECK CONDITION: [ $rce_condition ]"
+
+	eval "[[ $rce_condition ]]" 1>$log_condition 2>&1
+ 	rce_result_condition=$?
+	check_log_condition
+
+	echo_log -l "RETURN CODE FOR CONDITION: '$rce_result_condition'"
+	
+	[[ $rce_result_condition = 0 ]] && rce_command="$rce_true_command" || rce_command="$rce_false_command"
+	echo_log -l "\nNext commnd will be running '$rce_command'"
+
+	echo_log -s "RUN COMMAND: '$rce_command'"
+	echo_log -l "RESULT:\n"
+	
+	eval "$rce_command"  1>>$LOG 2>&1
+	rce_result=$?
+	
+	echo_log -l "\nRETURN CODE: '$rce_result'\n"
+	
+	if [[ -n $rce_return_code ]]; then 
+
+		echo_log -l "RETURN CODE FOR LAST COMMAND CAN BE: '$rce_return_code_options'\n" 
+
+		for rce_r in $rce_return_code_options; do
+			[[ $rce_r = $rce_result ]] && rce_result=0 
+		done
+	fi
+
+	command_check_result $rce_result $1 "$rce_command"
+}
+
+#F
+#FUNCTION show_command_output
+#F
+#F Usage: show_command_output -{E|W|N}[erflsra] command "message"
+#F
+#F Print file to screen, to Log File and to Report File
+#F
+#F $1  -{E|W}[erflsra[p "massage to print"]]
+#F W  WARNING
+#F E  ERROR
+#F N  Don't Check return code
+#F e  In case of error or warning exit
+#F r  Print to report file
+#F p  Print header other then default
+#F f  Disable flag WARNING or ERROR
+#F l  Print to log only
+#F
+#F $2  File name
+#F
+#F EXAMPLES:
+#F show_command_output -Na "cat /etc/fstab" "fstab file"
+#F show_command_output -Ee "numactl --hardware"
+#F
+
+show_command_output()
+{
+	_fun=show_command_output
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para erflsrap $1
+	check_input_para $2
+
+	sco_error=$1
+	sco_command=$2
+	sco_header=$3
+	
+	if [[ `echo "X$1" | egrep -c 's|a'` = 0 ]]; then
+		sco_screen_logFlag=0
+		sco_screen_log="-l"
+	else
+		sco_screen_logFlag=1
+		sco_screen_log="-sl"	
+	fi
+
+	[[ -n $sco_header ]] && sco_header="'$sco_header'\n"
+	
+	echo_log -l "Show stdout and stderr for command: '$sco_command'"
+	
+	[ $sco_screen_logFlag = 0 ] && eval "$sco_command" >>$LOG || eval "$sco_command" | tee -a $LOG
+	
+	sco_result=$?
+	
+	echo_log $sco_screen_log "$line_dash\n"
+	
+	command_check_result $sco_result $1 "$sco_command"
+}
+
+#F f var
+#F ############################################################################
+#F
+#FUNCTION var
+#F
+#F Usage: var -{E|W|EO|WO|O|N}[ealqsrcfjJ] var_name command
+#F
+#F Define variable
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealqsrcfjJ]
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F O   OK
+#F e   In case of error or warning exit
+#F c   Check value not null
+#F a   Print to screen Log File Report File
+#F s   Print to screen
+#F r   Print to Report File
+#F l   Print to Log File
+#F p   run show
+#F j   Print new line before message
+#F J   Do not print new line after message
+#F f   Disable flag WARNING or ERROR
+#F
+#F $2  Variable name
+#F
+#F $3  Output command will be the value for the variable
+#F
+#F EXAMPLES:
+#F var -Ee OPT_SIZE_90 "echo \"$(($OPT_SIZE / 100 * 90))\""
+#F var -Eecs  aa "ls" 
+#F var -N varName "grep disk file_name"
+#F var -Ee varName "grep disk file_name"
+#F
+
+var()
+{
+	_fun=var
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	check_input_para $3
+	
+	var_error=$1
+	var_var=$2
+	var_com=$3
+
+	echo_log -l "VARIABLE: '$var_var'"
+	echo_log -l "RESULT:\n"
+	
+	var_value=`eval $var_com 2>>$LOG`
+	var_result=$?
+	eval $var_var='$var_value'
+
+	echo_log -l "\nVARIABLE VALUE: '$var_value'"
+	echo_log -l "RETURN CODE: '$var_result'\n"
+
+	variable_check_result $1 $2 $var_result
+	variable_check_value $1 $2
+	variable_show_value $1 $2	
+}
+
+#F
+#FUNCTION echo_log_var
+#F
+#F Usage: echo_log_var [-a|r|s|l|j|J]] ["varible and value to print"]
+#F
+#F $1  -[a|r|s|l] 
+#F F   Print to function name Must be First
+#F     Default print to screen and Log File
+#F a   Print to screen Log File Report File
+#F s   Print to screen 
+#F r   Print to Report File
+#F l   Print to Log File
+#F
+#F $2  Variable to print
+#F
+#F This function use set -f set +f
+#F
+#F EXAMPLES:
+#F echo_log_var -F "function name"
+#F echo_log_var VAR
+#F echo_log_var -s VAR
+#F echo_log_var -l VAR
+#F
+
+echo_log_var()
+{
+	elv_logFlag=1
+	elv_screenFlag=0
+	elv_reportFlag=0
+	elv_new_line_before=
+	elv_new_line_after=
+	
+	if (echo "X$1" | grep 'X-' 1>/dev/null 2>&1 ); then
+		(echo "X$1" | grep s 1>/dev/null 2>&1 ) && elv_screenFlag=1
+		(echo "X$1" | grep r 1>/dev/null 2>&1 ) && elv_reportFlag=1
+		(echo "X$1" | grep j 1>/dev/null 2>&1 ) && elv_new_line_before="\n"
+		(echo "X$1" | grep J 1>/dev/null 2>&1 ) && elv_new_line_after="\n"
+		shift
+	else
+		elv_screenFlag=1
+		elv_reportFlag=1
+	fi
+	
+	check_input_para $1
+
+	if [[ $# = 2 ]]; then
+		elv_condition=$2
+
+		eval "[[ $elv_condition ]]" 1>>$LOG 2>&1
+ 		elv_result_condition=$?
+
+		[[ $elv_result_condition != 0 ]] && elv_run=NOT || elv_run=
+
+		echo_log -l "\nNext print variable '$elv_var' will $elv_run be print."
+		[[ $elv_run = NOT ]] && return
+
+		shift
+	fi
+	elv_var=$1
+	eval "elv_value=\$$elv_var"
+	
+	elv_mesg="${elv_new_line_before}$elv_var=$elv_value$elv_new_line_after"
+	
+	[[ $elv_screenFlag = 1 ]] && $ECHO "$elv_mesg"
+	[[ $elv_reportFlag = 1 ]] && $ECHO "$elv_mesg" >> $REPORT
+	$ECHO "echo_log_var(): To screen '$elv_mesg'\n" >> $LOG
+}
+
+#F
+#FUNCTION var_if
+#F
+#F Usage: var_if -{E|W|EO|WO|O|N}[ealqsrcfjJ] var_name condition command_value
+#F
+#F Define variable by run command
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealqsrcfjJ]
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F O   OK
+#F e   In case of error or warning exit
+#F c   Check value not null
+#F a   Print to screen Log File Report File
+#F s   Print to screen
+#F r   Print to Report File
+#F l   Print to Log File
+#F j   Print new line before message
+#F J   Do not print new line after message
+#F f   Disable flag WARNING or ERROR
+#F
+#F $2  Variable name
+#F
+#F $3  If condition is true define variable
+#F
+#F $4  Output command will be the value for the variable
+#F
+#F EXAMPLES:
+#F var_if -Eecs  aa "grep dir file1" "ls -l file1"
+#F var_if -N varName "$disk = /dev/sda" "grep disk file_name"
+#F var_if -Ee varName "$disk = /dev/sda" "grep disk file_name"
+#F var_if -Ee varName "$disk = /dev/sda" "grep disk file_name"
+#F
+
+var_if()
+{
+	_fun=var_if
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	check_input_para $3
+	check_input_para $4
+	
+	vai_error=$1
+	vai_var=$2
+	vai_condition=$3
+	vai_command=$4
+
+	echo_log -l "CHECK CONDITION: [ $vai_condition ]"
+
+	eval "[[ $vai_condition ]]" 1>$log_condition 2>&1
+ 	vai_result_condition=$?
+	check_log_condition
+
+	echo_log -l "RETURN CODE FOR CONDITION: '$vai_result_condition'"
+
+	[[ $vai_result_condition != 0 ]] && vai_run=NOT || vai_run=
+
+	echo_log -l "\nNext variable '$vai_var' will $vai_run be defined."
+	
+	[[ $vai_result_condition != 0 ]] && return
+
+	echo_log -l "VARIABLE: '$vai_var'"
+	echo_log -l "RESULT:\n"
+
+	vai_value=`eval $vai_command 2>>$LOG`
+ 	vai_result=$?
+	eval $vai_var='$vai_value'
+	
+	echo_log -l "\nVARIABLE VALUE: '$vai_value'"
+	echo_log -l "RETURN CODE: '$vai_result'"
+
+	variable_check_result $1 $2 $vai_result
+	variable_check_value $1 $2
+	variable_show_value $1 $2	
+}
+
+#F
+#FUNCTION var_if_not
+#F
+#F Usage: var_if_not -{E|W|EO|WO|O|N}[ealqsrcfjJ] var_name condition_not command_value
+#F
+#F Define variable by run command and oppesite result
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealqsrcfjJ]
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F O   OK
+#F e   In case of error or warning exit
+#F c   Check value not null
+#F a   Print to screen Log File Report File
+#F s   Print to screen
+#F r   Print to Report File
+#F l   Print to Log File
+#F j   Print new line before message
+#F J   Do not print new line after message
+#F f   Disable flag WARNING or ERROR
+#F
+#F $2  Variable name
+#F
+#F $3  If condition is true define variable
+#F
+#F $4  Output command will be the value for the variable
+#F
+#F EXAMPLES:
+#F var_if_not -N varName "$disk = /dev/sda" "grep disk file_name"
+#F var_if_not -Ee varName "$disk = /dev/sda" "grep disk file_name"
+#F var_if_not -Eeo varName "$disk = /dev/sda" "grep disk file_name"
+#F var_if_not -EeoR host:dbs "$disk = /dev/sda" "grep disk file_name"
+#F
+
+var_if_not()
+{
+	_fun=var_if_not
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	check_input_para $3
+	check_input_para $4
+	
+	vin_error=$1
+	vin_var=$2
+	vin_condition=$3
+	vin_command=$4
+	vin_mesg=$5
+
+	echo_log -l "CHECK CONDITION: [ $vin_condition ]"
+
+	eval "[[ $vin_condition ]]" 1>$log_condition 2>&1
+ 	vin_result_condition=$?
+	check_log_condition
+
+	echo_log -l "RETURN CODE FOR CONDITION: '$vin_result_condition'"
+	
+	[[ $vin_result_condition = 0 ]] && vin_run=NOT || vin_run=
+
+	echo_log -l "\nNext variable '$vin_var' will $vin_run be defined."
+	
+	[[ $vin_result_condition = 0 ]] && return
+
+	echo_log -l "VARIABLE: '$vin_var'"
+	echo_log -l "RESULT:\n"
+
+	vin_value=`eval $vin_command 2>>$LOG`
+ 	vin_result=$?
+	eval $vin_var='$vin_value'
+	
+	echo_log -l "\nVARIABLE VALUE: '$vin_value'"
+	echo_log -l "RETURN CODE: '$vin_result'"
+
+	variable_check_result $1 $2 $vin_result
+	variable_check_value $1 $2
+	variable_show_value $1 $2	 
+}
+
+#F
+#FUNCTION var_if_else
+#F
+#F Usage: var_if_else -{E|W|EO|WO|O|N}[ealqsrcfjJ] var_name condition true_command false_command
+#F
+#F Define variable by run command
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealqsrcfjJ]
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F O   OK
+#F e   In case of error or warning exit
+#F c   Check value not null
+#F a   Print to screen Log File Report File
+#F s   Print to screen
+#F r   Print to Report File
+#F l   Print to Log File
+#F j   Print new line before message
+#F J   Do not print new line after message
+#F f   Disable flag WARNING or ERROR
+#F
+#F $2  Variable name
+#F
+#F $3  Check condition
+#F
+#F $4  If condition true run first command and output will be the value for the variable
+#F
+#F $5  If condition false run second command and output will be the value for the variable
+#F
+#F EXAMPLES:
+#F var_if_else -N varName "$disk = /dev/sda" "grep disk file_name" "echo 1"
+#F var_if_else -Ee varName "$disk = /dev/sda" "grep disk file_name" "echo 1"
+#F var_if_else -Eeo varName "$disk = /dev/sda" "grep disk file_name" "echo 1"
+#F var_if_else -EeoR host:dbs "$disk = /dev/sda" "grep disk file_name" "echo 1"
+#F
+
+var_if_else()
+{
+	_fun=var_if_else
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	check_input_para $3
+	check_input_para $4
+	check_input_para $5
+	
+	vie_error=$1
+	vie_var=$2
+	vie_condition=$3
+	vie_true_command=$4
+	vie_false_command=$5
+
+	echo_log -l "CHECK CONDITION: [ $vie_condition ]"
+
+	eval "[[ $vie_condition ]]" 1>$log_condition 2>&1
+ 	vie_result_condition=$?
+	check_log_condition
+	
+	echo_log -l "RETURN CODE FOR CONDITION: '$vie_result_condition'"
+
+	[[ $vie_result_condition = 0 ]] && vie_run_command=$vie_true_command || vie_run_command=$vie_false_command
+
+	echo_log -l "\nCommand '$vie_run_command' will be run"
+
+	echo_log -l "VARIABLE: '$vie_var'"
+	echo_log -l "RESULT:\n"
+
+	vie_value=`eval $vie_run_command 2>>$LOG`
+ 	vie_result=$?
+	eval $vie_var='$vie_value'
+
+	echo_log -l "\nVARIABLE VALUE: '$vie_value'"
+	echo_log -l "RETURN CODE: '$vie_result'"
+
+	variable_check_result $1 $2 $vie_result
+	variable_check_value $1 $2
+	variable_show_value $1 $2	 
+}
+
+#F
+#FUNCTION check_var
+#F
+#F Usage: check_var
+#F
+#F Show variable and value
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealsrf]
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F a   Print to screen Log File Report File
+#F s   Print to screen
+#F r   Print to Report File
+#F l   Print to Log File
+#F
+#F EXAMPLES:
+#F check_var -Ee disk1
+#F check_var -E disk1
+#F check_var -W disk1
+#F check_var -We disk1
+#F check_var -O disk1
+#F
+
+check_var()
+{
+	_fun=check_var
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	
+	chv_error=$1
+	chv_var=$2
+	chv_mesg=$3
+	
+	[[ "X$chv_mesg" = "X" ]] && chv_mesg="While checking value to variable '$chv_var'"
+	
+	eval "chv_value=\$$chv_var"
+
+	variable_check_value ${1}c $2
+}
+
+#F
+#FUNCTION check_var_if
+#F
+#F Usage: check_var_if
+#F
+#F Show variable and value
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealsrf]
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F a   Print to screen Log File Report File
+#F s   Print to screen
+#F r   Print to Report File
+#F l   Print to Log File
+#F
+#F EXAMPLES:
+#F check_var_if -Ee disk1 "a=$a"
+#F check_var -E disk1 "a=$a"
+#F check_var -W disk1 "a=$a"
+#F check_var -We disk1 "a=$a"
+#F check_var -O disk1 "a=$a"
+#F
+
+check_var_if()
+{
+	_fun=check_var_if
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	check_input_para $3
+
+	cvi_error=$1
+	cvi_name=$2
+	cvi_condition=$3
+
+	eval "[[ $cvi_condition ]]" 1>>$LOG 2>&1
+ 	cvi_result_condition=$?
+
+	if [[ $cvi_result_condition = 0 ]]; then
+		variable_check_value ${1}c $2
+	else
+		echo_log -ljJ "- Will not check variable '$cvi_name'"
+	fi
+}
+#F
+#FUNCTION check_var_loop
+#F
+#F Usage: check_var_loop
+#F
+#F Show variable and value
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealsrf]
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F a   Print to screen Log File Report File
+#F s   Print to screen
+#F r   Print to Report File
+#F l   Print to Log File
+#F
+#F EXAMPLES:
+#F check_var_loop -Ee disk1 disk2
+#F check_var_loop -E disk1 disk2
+#F check_var_loop -W disk1 disk2
+#F check_var_loop -We disk1 disk2
+#F check_var_loop -O disk1 disk2
+#F
+
+check_var_loop()
+{
+	_fun=check_var_loop
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	
+	chv_error=$1
+	shift
+	chv_vars="$*"
+
+	for chv_var in $chv_vars; do
+		eval "chv_value=\$$chv_var"
+
+		variable_check_value ${chv_error}c $chv_var
+	done
+}
+
+#F
+#FUNCTION check_var_loop_if
+#F
+#F Usage: check_var_loop_if
+#F
+#F Show variable and value
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealsrf]
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F a   Print to screen Log File Report File
+#F s   Print to screen
+#F r   Print to Report File
+#F l   Print to Log File
+#F
+#F EXAMPLES:
+#F check_var_loop_if -Ee disk1 disk2 "a=$a"
+#F check_var -E disk1  disk2 "a=$a"
+#F check_var -W disk1  disk2 "a=$a"
+#F check_var -We disk1  disk2 "a=$a"
+#F check_var -O disk1  disk2 "a=$a"
+#F
+
+check_var_loop_if()
+{
+	_fun=check_var_loop_if
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	check_input_para $3
+
+	cvi_error=$1
+	shift
+	cvi_condition="$1"
+	shift
+
+	eval "[[ $cvi_condition ]]" 1>>$LOG 2>&1
+ 	cvi_result_condition=$?
+
+	if [[ $cvi_result_condition != 0 ]]; then
+	
+		echo_log -ljJ "- Will not check variables with condition '$*'"
+		return
+	fi
+
+	for cvi_name in $*; do
+		variable_check_value ${cvi_error}c $cvi_name
+	done
+}
+
+#F
+#FUNCTION check_eval_var
+#F
+#F Usage: check_eval_var
+#F
+#F Show variable and value and eval short var
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealsrf]
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F c   Check value not null
+#F n   Don't check value
+#F s   Print to screen
+#F r   Print to Report File
+#F l   Print to Log File
+#F
+#F EXAMPLES:
+#F check_eval_var -Ee pre disk1
+#F check_eval_var -E pre vm_name
+#F check_eval_var -W pre vm_name
+#F check_eval_var -We pre vm_name
+#F
+
+check_eval_var()
+{
+	_fun=check_eval_var
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqnsrcfjJ $1
+	check_input_para $2
+	check_input_para $3
+	
+	cev_error=$1
+	cev_pre=$2
+	cev_var=$3
+	cev_name=$cev_pre$cev_var
+	eval "cev_value=\$$cev_pre$cev_var"
+
+	[[ `echo "$1" | grep -c "n"` = 1 ]] && variable_check_value ${1}c $cev_name
+	
+	eval "$cev_var=$cev_value"
+	cev_result=$?
+ 
+	variable_check_result $1 $cev_var $cev_result
+	
+	if [[ `echo "$1" | grep -c "n"` = 1 ]]; then
+		variable_show_value $1 $cev_name
+		variable_show_value $1 $cev_var
+		echo_log -l "- Will not check value"; return
+	fi
+	variable_check_value $1 $cev_name
+	variable_show_value $1 $cev_name
+	variable_check_value $1 $cev_var
+	variable_show_value $1 $cev_var
+}
+
+#F
+#FUNCTION reset_var
+#F
+#F Usage: reset_var
+#F
+#F Show variable and value
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealqsrcfjJ]
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F
+#F a   Print to screen Log File Report File
+#F s   Print to screen
+#F r   Print to Report File
+#F l   Print to Log File
+#F
+#F EXAMPLES:
+#F reset_var -Eea dev 
+#F reset_var -Es dev
+#F reset_var -Wl dev
+#F
+
+reset_var()
+{
+	_fun=reset_var
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	
+	rev_error=$1
+	rev_var=$2
+
+ 	eval "$rev_var="
+	eval "rev_value=\$$rev_var"
+	
+	[[ $error_NFlag = 0 && -n $rev_value ]] && display $rev_error "While reseting variable '$rev_var'"
+	 
+	variable_show_value $1 $2	 
+}
+
+#F
+#FUNCTION reset_var_if
+#F
+#F Usage: reset_var_if
+#F
+#F Show variable and value
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealqsrcfjJ]
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F
+#F a   Print to screen Log File Report File
+#F s   Print to screen
+#F r   Print to Report File
+#F l   Print to Log File
+#F
+#F EXAMPLES:
+#F reset_var_if -Eea "a = a" dev 
+#F reset_var_if -Es "a = a" dev
+#F reset_var_if -Wl "b = b" dev
+#F
+
+reset_var_if()
+{
+	_fun=reset_var_if
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	
+	ref_error=$1
+	ref_var=$2
+	ref_condition=$3
+
+	echo_log -l "CHECK CONDITION: [ $ref_condition ]"
+
+	eval "[[ $ref_condition ]]" 1>$log_condition 2>&1
+ 	ref_result_condition=$?
+	check_log_condition
+
+	echo_log -l "RETURN CODE FOR CONDITION: '$ref_result_condition'"
+
+	[[ $ref_result_condition != 0 ]] && ref_run=NOT || ref_run=
+
+	echo_log -l "\nNext variable '$ref_var' will $ref_run be reset."
+	
+	[[ $ref_result_condition != 0 ]] && return
+	
+ 	eval "$ref_var="
+	eval "ref_value=\$$ref_var"
+	
+	[[ $error_NFlag = 0 && -n $ref_value ]] && display $ref_error "While reseting variable '$ref_var'"
+	 
+	variable_show_value $1 $2	 
+}
+
+#F
+#FUNCTION define_var
+#F
+#F Usage: define_var
+#F
+#F Show variable and value
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealqsrcfjJ] var_name value
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F
+#F a   Print to screen Log File Report File
+#F s   Print to screen
+#F r   Print to Report File
+#F l   Print to Log File
+#F c   Check value not null
+#F
+#F EXAMPLES:
+#F define_var -Eea dev disk1
+#F define_var -Es dev disk1
+#F define_var -Wlc dev disk1
+#F
+
+define_var()
+{
+	_fun=define_var
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	check_input_para $3
+
+	dva_error=$1
+	dva_name=$2
+	dva_value=$3
+
+	remove_XX dva_value
+	
+	eval "$dva_name=\"$dva_value\""
+	dva_result=$?
+	
+	variable_check_result $1 $2 $dva_result
+	variable_check_value $1 $2
+	variable_show_value $1 $2	
+}
+
+#F
+#FUNCTION define_var_if
+#F
+#F Usage: define_var_if
+#F
+#F Show variable and value
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealqsrcfjJ] var_name condition value
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F
+#F a   Print to screen Log File Report File
+#F s   Print to screen
+#F r   Print to Report File
+#F l   Print to Log File
+#F c   Check value not null
+#F
+#F EXAMPLES:
+#F define_var_if -Eea dev "$a = 1" disk1
+#F define_var_if  -Es dev "$a = 1" disk1
+#F define_var_if  -Wlc dev "$a = 1" disk1
+#F
+
+define_var_if()
+{
+	_fun=define_var_if
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	check_input_para $3
+	check_input_para $4
+
+	dvi_error=$1
+	dvi_name=$2
+	dvi_condition=$3
+	dvi_value=$4
+	remove_XX dvi_value
+
+	eval "[[ $dvi_condition ]]" 1>>$LOG 2>&1
+ 	dvi_result_condition=$?
+
+	if [[ $dvi_result_condition = 0 ]]; then
+		eval "$dvi_name=\"$dvi_value\""
+		dvi_result=$?
+
+		variable_check_result $1 $2 $dvi_result
+		variable_check_value $1 $2
+		variable_show_value $1 $2
+	else
+		echo_log -ljJ "- Will not define variable '$dvi_name' with value '$dvi_value'"
+	fi	
+}
+
+#F
+#FUNCTION define_var_if_not
+#F
+#F Usage: define_var_if_not
+#F
+#F Show variable and value
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealqsrcfjJ] var_name  !condition value
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F
+#F a   Print to screen Log File Report File
+#F s   Print to screen
+#F r   Print to Report File
+#F l   Print to Log File
+#F c   Check value not null
+#F
+#F EXAMPLES:
+#F define_var_if_not -Eea dev "dev = 1" "disk1"
+#F define_var -Es disk1
+#F define_var -Wlc disk1
+#F
+
+define_var_if_not()
+{
+	_fun=define_var_if_not
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	check_input_para $3
+	check_input_para $4
+
+	dvn_error=$1
+	dvn_name=$2
+	dvn_condition=$3
+	dvn_value=$4
+	remove_XX dvn_value
+
+	eval "[[ $dvn_condition ]]" 1>>$LOG 2>&1
+ 	dvn_result_condition=$?
+
+	if [[ $dvn_result_condition != 0 ]]; then
+		eval "$dvn_name=\"$dvn_value\""
+		dvn_result=$?
+
+		variable_check_result $1 $2 $dvn_result
+		variable_check_value $1 $2
+		variable_show_value $1 $2
+	else
+		echo_log -ljJ "- Will not define variable '$dvn_name' with value '$dvn_value'"
+	fi
+}
+
+#F
+#FUNCTION define_var_if_else
+#F
+#F Usage: define_var_if_else
+#F
+#F Show variable and value
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealqsrcfjJ] var_name !condition true_value false_value
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F
+#F a   Print to screen Log File Report File
+#F s   Print to screen
+#F r   Print to Report File
+#F l   Print to Log File
+#F c   Check value not null
+#F
+#F EXAMPLES:
+#F define_var -Eea  "dev = 1" "disk1" "disk2"
+#F define_var -Es "dev = 1" "disk1" "disk2"
+#F define_var -Wlc "dev = 1" "disk1" "disk2"
+#F
+
+define_var_if_else()
+{
+	_fun=define_var_if_else
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealrsc $1
+	check_input_para $2
+	check_input_para $3
+	check_input_para $4
+	check_input_para $5
+	
+	dve_error=$1
+	dve_name=$2
+	dve_condition=$3
+	dve_value_true=$4
+	remove_XX dve_value_true
+	dve_value_false=$5
+	remove_XX dve_value_false
+	
+	eval "[[ $dve_condition ]]" 1>>$LOG 2>&1
+ 	dve_result_condition=$?
+
+	[[ $dve_result_condition = 0 ]] && dve_value=$dve_value_true || dve_value=$dve_value_false
+	eval "$dve_name=\"$dve_value\""
+	dve_result=$?
+	
+	variable_check_result $1 $2 $dve_result
+	variable_check_value $1 $2
+	variable_show_value $1 $2
+}
+
+#F
+#FUNCTION show_var
+#F
+#F Usage: show_var
+#F
+#F Show variable and value
+#F
+#F $1  -{E|W|EO|WO|O|N}[eofnjJPR <host>[:<user>]]
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F
+#F a   Print to screen Log File Report File
+#F s   Print to screen 
+#F r   Print to Report File
+#F l   Print to Log File
+#F c   Check value not null
+#F
+#F EXAMPLES:
+#F show_var -Eea disk1
+#F show_var -Ws disk1
+#F show_var -Eel disk1
+#F show_var -Ecr disk1
+#F show_var -Eelrc disk1
+#F
+
+show_var()
+{
+	_fun=show_var
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	shv_error=$1
+	shv_var=$2
+	shv_mesg=$3
+	
+	first_para ealrsc $1
+	check_input_para $2
+
+	eval "shv_value=\$$shv_var"
+	
+	[[ `echo "$1" | grep -c "s"` = 0 ]] && shv_to=-l || shv_to=-ls
+	
+	echo_log $shv_to "* $shv_var='$shv_value'"
+	
+	variable_check_value $1 $2
+}
+
+#F
+#FUNCTION new_var_same_value
+#F
+#F Usage: new_var_same_value
+#F
+#F create extend var name with the same value
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealqsrcfjJ] var_name value
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F
+#F a   Print to screen Log File Report File
+#F s   Print to screen
+#F r   Print to Report File
+#F l   Print to Log File
+#F c   Check value not null
+#F
+#F EXAMPLES:
+#F new_var_same_value -Eea var pre
+#F new_var_same_value -Es vara  bbb
+#F
+
+new_var_same_value()
+{
+	_fun=new_var_same_value
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	check_input_para $3
+
+	nvs_error=$1
+	
+	if [[ $3 = PRE_VM ]]; then
+		nvs_pre=`eval echo $PRE_VM`
+		nvs_name=$2
+
+		eval "$nvs_name=\"\$$nvs_pre$nvs_name\""
+		nvs_result=$?
+		nvs_var="$nvs_name"
+	else
+		nvs_pre=$2
+		nvs_name=$3
+
+		eval "$nvs_pre$nvs_name=\"\$$nvs_name\""
+		nvs_result=$?
+	
+		nvs_var="$nvs_pre$nvs_name"
+	fi
+	
+	variable_check_result $1 $nvs_var $nvs_result
+	variable_check_value $1 $nvs_var
+	variable_show_value $1 $nvs_var	
+}
+
+#F
+#FUNCTION eval_var
+#F
+#F Usage: eval_var
+#F
+#F create extend var name with the same value
+#F
+#F $1  -{E|W|EO|WO|O|N}[ealqsrcfjJ] var_name value
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F
+#F a   Print to screen Log File Report File
+#F s   Print to screen
+#F r   Print to Report File
+#F l   Print to Log File
+#F c   Check value not null
+#F
+#F EXAMPLES:
+#F eval_var -Eea var pre
+#F eval_var -Es vara  bbb
+#F
+
+eval_var()
+{
+	_fun=eval_var
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealnqsrcfjJ $1
+	check_input_para $2
+
+	evv_error=$1
+	evv_pre=$2
+	evv_name=$3
+	
+	eval "$evv_name=\$$evv_pre$evv_name"
+	evv_result=$?
+ 
+	variable_check_result $1 $evv_name $evv_result
+	if [[ `echo "$1" | grep -c "n"` = 1 ]]; then
+		echo_log -l "- Will not check value"; return
+	fi
+	variable_check_value $1 $evv_name
+	variable_show_value $1 $evv_name
+}
+
+#F f show_line
+#F ############################################################################
+#F
+#FUNCTION show_egrep_lines_4_file
+#F
+#F Usage: show_egrep_lines_4_file -{E|W}[esifrgn] [-l<number line>] fileName "find string"
+#F
+#F Find string in file
+#F
+#F $1  -{E|W}[esifrg]
+#F s   Show information on screen
+#F i   Ignore if line doesn't exist
+#F f   Disable flag WARNING or ERROR
+#F r   Remove string; it like replace string with empty string
+#F
+#F $2  File name
+#F
+#F $3  String to search
+#F
+#F EXAMPLES:
+#F show_egrep_lines_4_file -Ees file "stringA stringB"
+#F show_egrep_lines_4_file -Ee  file "stringA "
+#F
+
+show_egrep_lines_4_file()
+{
+	_fun=show_egrep_lines_4_file
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	check_input_para $3
+	
+	rlf_error=$1
+	rlf_file_name=$2
+	rlf_string=$3
+	
+	if [[ `echo "X$1" | egrep -c 's|a'` = 0 ]]; then
+		rlf_screen_logFlag=0
+		rlf_screen_log="-l"
+	else
+		rlf_screen_logFlag=1
+		rlf_screen_log="-sl"	
+	fi
+	
+	rlf_message="'$rlf_string' in file '$rlf_file_name'"
+
+	if [[ ! -e $rlf_file_name ]]; then
+		display $rlf_error "File doesn't exist '$rlf_file_name'"
+		return
+	fi
+
+	echo_log "\nLines includes strings $rlf_message\n$_line"
+	
+	[ $rlf_screen_logFlag = 0 ] && egrep "$rlf_string" $rlf_file_name >>$LOG || egrep "$rlf_string" $rlf_file_name | tee -a $LOG
+	rlf_result=$?
+	
+	echo_log "$_line\n"
+}
+
+#F f add_line
+#F ############################################################################
+#F f add_lines
+#F
+#FUNCTION add_line_2_file
+#F
+#F Usage: add_line_2_file -{E|W}[eofi[w <word_grep>][g <string_grep>] [R <host>[:<user>]]] file_name line
+#F
+#F $1  -{E|W}[eofi[w <word_grep>][g <string_grep>] [R <host>[:<user>]]]
+#F W   WARNING
+#F E   ERROR
+#F o   Overwrite to file
+#F g   If string exists in file return
+#F w   If word exists in file return
+#F i   Ignore if whole line is exist in file
+#F e   In case of ERROR or WARNING exit
+#F f   Disable flag WARNING or ERROR
+#F R <host>:[<user>] For running on remote station (user that run is the default)
+#F
+#F $2  File 
+#F
+#F $3  Line to add to end of file
+#F
+#F EXAMPLES:
+#F add_line_2_file -Ee /usr/local/file "last line to added"
+#F add_line_2_file -Eeo /usr/local/file "file with one line"
+#F add_line_2_file -Eego "string a" /usr/local/file "file with one line"
+#F add_line_2_file -Eei /usr/local/file "string line"
+#F
+
+add_line_2_file()
+{
+	_fun=add_line_2_file
+	_para="$_fun $*"
+	fun_2_log $_para
+	alf_tmp=/tmp/_add_line_2_file_
+	
+	first_para eofigwR $1
+	check_input_para $2
+	check_input_para $3
+
+	alf_error=$1
+	alf_file=$2
+	alf_line=$3
+	
+	alf_mesg="While Adding line to file '$alf_file'"
+
+	if [[ `echo "X$alf_error" | grep -c 'o'` = 1 ]]; then
+		alf_addFlag=0
+		alf_add_message="Overwrite on"
+	else
+		alf_addFlag=1
+		alf_add_message="Add to"
+	fi
+
+	echo_log -l "COMMAND: $alf_add_message file '$alf_file' line '$alf_line'"
+
+	if [[ $alf_addFlag = 0 ]]; then
+		echo "$alf_line" > $alf_file
+		alf_result=$?
+	else
+		echo "$alf_line" >> $alf_file
+		alf_result=$?
+	fi
+	
+	echo_log -l "\nRETURN CODE:'$alf_result'\n"
+
+	add_line_check_result $alf_result $1 $2 
+}
+
+#F
+#FUNCTION add_some_lines_2_file
+#F
+#F Usage: add_some_lines_2_file -{E|W}[eofi[w <word_grep>][g <string_grep>] [R <host>[:<user>]]] file_name line
+#F
+#F $1  -{E|W}[eofi[w <word_grep>][g <string_grep>] [R <host>[:<user>]]]
+#F W   WARNING
+#F E   ERROR
+#F o   Overwrite to file
+#F g   If string exists in file return
+#F w   If word exists in file return
+#F i   Ignore if whole line is exist in file
+#F e   In case of ERROR or WARNING exit
+#F f   Disable flag WARNING or ERROR
+#F R <host>:[<user>] For running on remote station (user that run is the default)
+#F
+#F $2  File 
+#F
+#F $3  Line to add to end of file
+#F
+#F EXAMPLES:
+#F add_some_lines_2_file -Ee /usr/local/file "last\nline\nto\nadded"
+#F add_some_lines_2_file -Eeo /usr/local/file "file with one line"
+#F add_some_lines_2_file -Eego "string a" /usr/local/file "file with one line"
+#F add_some_lines_2_file -Eei /usr/local/file "string line"
+#F
+
+add_some_lines_2_file()
+{
+	_fun=add_some_lines_2_file
+	_para="$_fun $*"
+	fun_2_log $_para
+	asl_tmp=/tmp/_add_line_2_file_
+	
+	first_para eofigwR $1
+	check_input_para $2
+	check_input_para $3
+
+	asl_error=$1
+	asl_file=$2
+	asl_line=$3
+	
+	asl_mesg="While Adding line to file '$asl_file'"
+
+	if [[ `echo "X$asl_error" | grep -c 'o'` = 1 ]]; then
+		asl_addFlag=0
+		asl_add_message="Overwrite on"
+	else
+		asl_addFlag=1
+		asl_add_message="Add to"
+	fi
+
+	echo_log -l "COMMAND: $asl_add_message file '$asl_file' line '$asl_line'"
+
+	if [[ $asl_addFlag = 0 ]]; then
+		echo -e "$asl_line" > $asl_file
+		asl_result=$?
+	else
+		echo -e "$asl_line" >> $alf_file
+		asl_result=$?
+	fi
+	
+	echo_log -l "\nRETURN CODE:'$asl_result'\n"
+
+	add_line_check_result $asl_result $1 $2
+}
+
+#F f remove
+#F ############################################################################
+#F
+#FUNCTION remove_last_char_4_var()
+#F
+#F Usage: remove_last_char_4_var -{E|W|EO|WO|O|N}[ealqsrcfjJ] var
+#F
+#F $1  -{E|W}[eofi[w <word_grep>][g <string_grep>] 
+#F W   WARNING
+#F E   ERROR
+#F
+#F $2 var
+#F
+
+#F EXAMPLES:
+#F remove_last_char_4_var -Ee  line c
+#F remove_last_char_4_var -We string "'"
+#F
+
+remove_last_char_4_var()
+{
+	_fun=remove_last_char_4_var
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	check_input_para $3
+
+	rlc_error=$1
+	rlc_var=$2
+	rlc_char=$3
+	
+	eval rlc_str="\$$rlc_var"
+	echo_log -l "\nSTRING: '$rlc_str''"
+	echo_log -l "REMOVE LAST CAHRCTER: '$rlc_char'"
+
+	rlc_new_string=`echo "$rlc_str" | sed "s/$rlc_char\$//"`
+	rlc_result=$?
+
+	eval $rlc_var="$rlc_new_string"
+	echo_log -l "\nNEW STRING: '$rlc_new_string'"
+	echo_log -l "RETURN CODE: '$rlc_result'"
+	
+	rlc_message="While chopping last charcter on variable '$rlc_var'"
+	
+	remove_check_result $rlc_result $1 "$rlc_message"
+}
+
+#F f remove
+#F ############################################################################
+#F
+#FUNCTION remove_first_char_4_var()
+#F
+#F Usage: remove_first_char_4_var -{E|W|EO|WO|O|N}[ealqsrcfjJ] var
+#F
+#F $1  -{E|W}[eofi[w <word_grep>][g <string_grep>] 
+#F W   WARNING
+#F E   ERROR
+#F
+#F $2 var
+#F
+
+#F EXAMPLES:
+#F remove_first_char_4_var -Ee  line c
+#F remove_first_char_4_var -We string "'"
+#F
+
+remove_first_char_4_var()
+{
+	_fun=remove_first_char_4_var
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	check_input_para $3
+
+	rfc_error=$1
+	rfc_var=$2
+	rfc_char=$3
+	
+	eval rfc_str="\$$rfc_var"
+	echo_log -l "\nSTRING: '$rfc_str''"
+	echo_log -l "REMOVE FIRST CAHRCTER: '$rfc_char'"
+
+	eval $rfc_var="$rfc_new_string"
+	rfc_new_string=`echo "$rfc_str" | sed "s/^$rfc_char//"`
+	rfc_result=$?
+	
+	echo_log -l "\nNEW STRING: '$rfc_new_string'"
+	echo_log -l "RETURN CODE: '$rfc_result'"
+	
+	rfc_message="While chopping first charcter on variable '$rfc_var'"
+	
+	remove_check_result $rfc_result $1 "$rfc_message"
+}
+
+#F f remove
+#F ############################################################################
+#F
+#FUNCTION remove_first_last_char_4_var()
+#F
+#F Usage: remove_first_last_char_4_var -{E|W|EO|WO|O|N}[ealqsrcfjJ] var
+#F
+#F $1  -{E|W}[eofi[w <word_grep>][g <string_grep>] 
+#F W   WARNING
+#F E   ERROR
+#F
+#F $2 var
+#F
+
+#F EXAMPLES:
+#F remove_first_last_char_4_var -Ee  line c
+#F remove_first_last_char_4_var -We string "'"
+#F
+
+remove_first_last_char_4_var()
+{
+	_fun=remove_first_last_char_4_var
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ealqsrcfjJ $1
+	check_input_para $2
+	check_input_para $3
+
+	rfl_error=$1
+	rfl_var=$2
+	rfl_char=$3
+	
+	eval rfl_str="\$$rfl_var"
+	echo_log -l "\nSTRING: '$rfl_str''"
+	echo_log -l "REMOVE FIRST AND LAST CAHRCTER: '$rfl_char'"
+
+	rfl_new_string=`echo "$rfl_str" | sed -e "s/^$rfl_char//" -e "s/$rfl_char\$//"`
+	rfl_result=$?
+	
+	eval $rfl_var="$rfl_new_string"
+	echo_log -l "\nNEW STRING: '$rfl_new_string'"
+	echo_log -l "RETURN CODE: '$rfl_result'"
+	
+	rfl_message="While chopping first and last charcter on variable '$rfl_var'"
+	
+	remove_check_result $rfl_result $1 "$rfl_message"
+}
+
+#F
+#FUNCTION remove_line_4_file
+#F
+#F Usage: remove_line_4_file -{E|W}[ewsfig] file_name string
+#F 
+#F Remove lines containing string from file
+#F
+#F $1  -{E|W}[ewsfig]
+#F W   WARNING
+#F E   ERROR
+#F i   Ignore if line doesn't exist (if string doesn't exist return code is not '0')
+#F e   In case of error or warning exit
+#F s   Print to screen
+#F f   Disable flag WARNING or ERROR
+#F g   Run the command if string exists in file
+#F w   For grep word 
+#F
+#F $2 File name 
+#F
+#F $3 String to find in line
+#F
+#F Tempfile includes the stdout and stderr $_remove_line
+#F
+#F EXAMPLES:
+#F remove_line_4_file -Ee file "to be found"
+#F remove_line_4_file -Eew file one_word
+#F remove_line_4_file -Wf file "to be found"
+#F remove_line_4_file -Wfg file "to be found"
+#F
+
+remove_line_4_file()
+{
+	_fun=remove_line_4_file
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ewsfgi $1
+	check_input_para $2
+	check_input_para $3
+
+	frl_error=$1
+	frl_file=$2
+	frl_string=$3
+	
+	remove_line_file=/tmp/remove_line_gf
+	rm -f $remove_line_file
+	
+	frl_message="Remove line includes string '$frl_string' from file '$frl_file'"
+	
+	echo_log -l "\n$frl_mseg\nLINES IN FILE CONTAIN THE STRING:\n"
+
+	 grep "$frl_string" $frl_file 1>>$LOG 2>&1
+	 frl_result=$?
+	 
+	if [[ $frl_result = 0 ]]; then
+	 sed -i "/$frl_string/d" $frl_file 1>>$LOG 2>&1
+	fi
+
+	command_check_result $frl_result $1 "$frl_message"
+}
+
+#F
+#FUNCTION replace_char_by_char_4_var()
+#F
+#F Usage: replace_char_by_char_4_var -{E|W|EO|WO|O|N}[ealqsrcfjJ] var_string new_char old_char
+#F
+#F $1  -{E|W}[eofi]
+#F W   WARNING
+#F E   ERROR
+#F
+#F $2  string 
+#F
+#F $3  old char
+#F
+#F $4  new char
+#F
+
+#F EXAMPLES:
+#F replace_char_by_char_4_var -Ee line ',' 'space'
+#F replace_char_by_char_4_var -Wei string ':' '/'
+#F
+
+replace_char_by_char_4_var()
+{
+	_fun=replace_char_by_char_4_var
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ei $1
+	check_input_para $2
+	check_input_para $3
+	check_input_para $4
+	
+	rcc_error=$1
+	rcc_var=$2
+	rcc_old_char=$3
+	[[ $rcc_old_char = space ]] && rcc_old_char=' '
+	rcc_new_char=$4
+	[[ $rcc_new_char = space ]] && rcc_new_char=' '
+	
+	rcc_mesg="While replacing char '$rcc_old_char' with char '$rcc_new_char' on string"
+
+	eval rcc_str="\$$rcc_var"
+	echo_log -l "\nOLD VALUE VAR: $rcc_var='$rcc_str''"
+	
+	rcc_new_string=`echo "$rcc_str" | tr "$rcc_old_char" "$rcc_new_char"`
+	rcc_result=$?
+	eval "$rcc_var=\"$rcc_new_string\""
+	
+	echo_log -l "\nNEW VALUE VAR: '$rcc_var='$rcc_new_string''"
+	echo_log -l "RETURN CODE: '$rcc_result'"
+
+	[[ $error_NFlag = 1 ]] && return
+	[[ $rcc_result != 0 ]] && display ${rcc_error}l "$rcc_mesg"
+}
+
+#F
+#FUNCTION replace_char_by_char_4_var_2_small()
+#F
+#F Usage: replace_char_by_char_4_var_2_small -{E|W|EO|WO|O|N}[ealqsrcfjJ] var_string new_char old_char
+#F
+#F $1  -{E|W}[eofi]
+#F W   WARNING
+#F E   ERROR
+#F
+#F $2  string 
+#F
+#F $3  old char
+#F
+#F $4  new char
+#F
+
+#F EXAMPLES:
+#F replace_char_by_char_4_var_2_small -Ee line ',' 'space'
+#F replace_char_by_char_4_var_2_small -Wei string ':' '/'
+#F
+
+replace_char_by_char_4_var_2_small()
+{
+	_fun=replace_char_by_char_4_var_2_small
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para ei $1
+	check_input_para $2
+	check_input_para $3
+	check_input_para $4
+	
+	rcc_error=$1
+	rcc_var=$2
+	rcc_old_char=$3
+	[[ $rcc_old_char = space ]] && rcc_old_char=' '
+	rcc_new_char=$4
+	[[ $rcc_new_char = space ]] && rcc_new_char=' '
+	
+	rcc_mesg="While replacing char '$rcc_old_char' with char '$rcc_new_char' on string"
+
+	eval rcc_str="\$$rcc_var"
+	echo_log -l "\nOLD VALUE VAR: $rcc_var='$rcc_str''"
+	
+	rcc_new_string=`echo "$rcc_str" | tr "$rcc_old_char" "$rcc_new_char"`
+	rcc_result=$?
+
+	rcc_var=`echo $rcc_var | tr 'A-Z' 'a-z'`
+	eval "$rcc_var=\"$rcc_new_string\""
+	
+	echo_log -l "\nNEW VAR and VALUE: '$rcc_var='$rcc_new_string''"
+	echo_log -l "RETURN CODE: '$rcc_result'"
+
+	[[ $error_NFlag = 1 ]] && return
+	[[ $rcc_result != 0 ]] && display ${rcc_error}l "$rcc_mesg"
+}
+
+#F
+#FUNCTION replace_str_4_file
+#F
+#F Usage: replace_str_4_file -{E|W}[esifrgn] [-l<number line>] fileName "find string" "new string"
+#F
+#F Replace string with new string in file list
+#F
+#F $1  -{E|W}[esifrg]
+#F s   Show information on screen
+#F i   Ignore if line doesn't exist
+#F f   Disable flag WARNING or ERROR
+#F r   Remove string; it like replace string with empty string
+#F
+#F $2  File name
+#F
+#F $3  Old string
+#F
+#F $4  New string
+#F        
+#F EXAMPLES:
+#F replace_str_4_file -Eei file "stringA stringB" "stringA stringC"
+#F replace_str_4_file -Ee  file stringA stringB
+#F replace_str_4_file -Wer file stringA 
+#F
+
+replace_str_4_file()
+{
+	_fun=replace_str_4_file
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para eisfrgn $1
+	check_input_para $2
+	check_input_para $3
+	check_input_para $4
+
+	rsf_error=$1
+	rsf_file=$2
+	rsf_string=$3
+	rsf_newString=$4
+
+	rsf_message="'$rsf_string' with '$rsf_newString' in file '$rsf_file'"
+	rsf_error_message=$rsf_message
+	
+	sed_delimiter "$rsf_string" "$rsf_newString"
+
+	echo_log -l "REPLACE STRING: $rsf_message"
+
+	sed -i "s${sdE_del}$rsf_string${sdE_del}$rsf_newString${sdE_del}g" $rsf_file
+	rsf_result=$?
+	
+	replace_check_result $rsf_result $1 $2 "$3" "$4" "$rsf_error_message"
+}
+
+#F
+#FUNCTION replace_by_line_number_4_file
+#F
+#F Usage: replace_by_line_number_4_file -{E|W}[esifrgn] fileName  numberLine "find string" "new string"
+#F
+#F Replace string with new string in file list
+#F
+#F $1  -{E|W}[esifrg]
+#F s   Show information on screen
+#F i   Ignore if line doesn't exist
+#F f   Disable flag WARNING or ERROR
+#F r   Remove string; it like replace string with empty string
+#F
+#F $2  File name
+#F
+#F $3  Line number
+#F
+#F $4  Old string
+#F
+#F $5  New string
+#F        
+#F EXAMPLES:
+#F replace_by_line_number_4_file -Eei file 4 "stringA stringB" "stringA stringC"
+#F replace_by_line_number_4_file -Ee  file 20 stringA stringB
+#F replace_by_line_number_4_file -Wer file 10 stringA "stringB"
+#F
+
+replace_by_line_number_4_file()
+{
+	_fun=replace_by_line_number_4_file
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para eisfrn $1
+	check_input_para $2
+	check_input_para $3
+	check_input_para $4
+	check_input_para $5
+
+	rbl_error=$1
+	rbl_file=$2
+	rbl_line=$3
+	rbl_string=$4
+	rbl_newString=$5
+
+	rbl_message="'$rbl_string' with '$rbl_newString' in file '$rbl_file' on line '$rbl_line'"
+	rbl_error_message=$rbl_message
+	
+	sed_delimiter "$rbl_string" "$rbl_newString"
+
+	echo_log -l "REPLACE STRING: $rbl_message"
+
+	sed -i "${rbl_line}s${sdE_del}$rbl_string${sdE_del}$rbl_newString${sdE_del}g" $rbl_file
+	rbl_result=$?
+	
+	replace_check_result $rbl_result $1 $2 "$3" "$4" "$rbl_error_message"
+}
+
+#F
+#FUNCTION replace_str_4_var
+#F
+#F Usage: replace_str_4_var -{E|W}[esifrgn] [-l<number line>] fileName "find string" "new string"
+#F
+#F Replace string with new string in file list
+#F
+#F $1  -{E|W}[esifrg]
+#F s   Show information on screen
+#F i   Ignore if line doesn't exist
+#F f   Disable flag WARNING or ERROR
+#F r   Remove string; it like replace string with empty string
+#F g   Run the command if replacing string doesn't exist
+#F n   Remove all lines which include the string
+#F
+#F
+#F $2  File names
+#F
+#F $3  Old string
+#F
+#F $4  New string
+#F        
+#F EXAMPLES:
+#F replace_str_4_var -Eei var1 "stringA stringB" "stringA stringC"
+#F replace_str_4_var -Ee  var1 stringA stringB
+#F replace_str_4_var -Eeg var1 "stringA" "stringB"
+#F replace_str_4_var -Ee var1 "stringA" "stringB"
+#F
+
+replace_str_4_var()
+{
+	_fun=replace_str_4_var
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para eisfrgn $1
+	check_input_para $2
+	check_input_para $3
+	check_input_para $4
+	
+	res_error=$1
+	res_var=$2
+	res_string=$3
+	res_newString=$4
+
+	res_message="'$res_string' with '$res_newString' in variable '$res_var'"
+	
+	sed_delimiter "$res_string" "$res_newString"
+
+	echo_log -l "REPLACE STRING: $res_message"
+
+	eval "res_value=\$$res_var"
+
+	res_value=`echo "$res_value" | sed "s${sdE_del}$res_string${sdE_del}$res_newString${sdE_del}g"`
+	res_result=$?
+
+	eval "$res_var=$res_value"
+	
+	replace_check_result $res_result $1 $2 "$3" "$4" "$res_message"
+}
+
+#F f file
+#F ############################################################################
+#F
+#FUNCTION show_file
+#F
+#F Usage: show_file -{E|W|N}[erflsra] file_name "message"
+#F
+#F Print file to screen, to Log File and to Report File
+#F
+#F $1  -{E|W}[erflsra[p "massage to print"]]
+#F W  WARNING
+#F E  ERROR
+#F N  Don't Check return code
+#F e  In case of error or warning exit
+#F r  Print to report file
+#F p  Print header other then default
+#F f  Disable flag WARNING or ERROR
+#F l  Print to log only
+#F
+#F $2  File name
+#F
+#F EXAMPLES:
+#F show_file -N /etc/file
+#F show_file -Ee /etc/file
+#F show_file -Ef /etc/file
+#F show_file -W /etc/file "File /etc/vfstab before changes"
+#F show_file -Wr /etc/file "File /etc/vfstab before changes"
+#F show_file -Ef /etc/file
+#F
+
+show_file()
+{
+	_fun=show_file
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para erflsrap $1
+	check_input_para $2
+
+	shf_error=$1
+	shf_file_name=$2
+	shf_header=$3
+	
+	if [[ `echo "X$1" | egrep -c 's|a'` = 0 ]]; then
+		shf_screen_logFlag=0
+		shf_screen_log="-l"
+	else
+		shf_screen_logFlag=1
+		shf_screen_log="-sl"	
+	fi
+
+	[[ -n $shf_header ]] && shf_header="'$shf_header'\n"
+	
+	if [[ ! -e $shf_file_name ]]; then
+		display $shf_error "File doesn't exist '$shf_file_name'"
+		return
+	fi
+
+	echo_log $shf_screen_log "Show file '$shf_file_name'\n$shf_header$line_dash"
+
+	[ $shf_screen_logFlag = 0 ] && cat $shf_file_name >>$LOG || cat $shf_file_name | tee -a $LOG
+	
+	echo_log $shf_screen_log "$line_dash\n"
+}
+
+#F
+#FUNCTION check_file_exist
+#F
+#F Usage: check_file_exist -Ee file
+#F
+#F $1 <directory>
+#F
+#F In case of error exit from script
+#F
+#F EXAMPLES:
+#F check_file_exist -Ee /dir/filename
+#F
+
+check_file_exist()
+{
+	_fun=check_file_exist
+	_para="$_fun $*"
+	fun_2_log $_para
+
+	first_para erflsrap $1
+	check_input_para $2
+
+	cfe_error=$1
+	cfe_file=$2
+	
+
+	echo_log -l "COMMAND: 'ls -l $cfe_file'"
+	echo_log -l "RESULT:\n"
+
+	ls -l $cfe_file 1>>$LOG 2>&1
+	cfe_result=$?
+
+	echo_log -l "\nRETURN CODE: '$cfe_result'\n"
+
+	[[ $error_NFlag = 0 && $cfe_result != 0 ]] && display $cfe_error "File '$cfe_file' doesn't exist"
+}
+
+#F f dir
+#F
+#FUNCTION check_dir
+#F
+#F Usage: check_dir -Ee directory
+#F
+#F $1 <directory>
+#F
+#F In case of error exit from script
+#F
+#F EXAMPLES:
+#F check_dir  /dir
+#F
+
+check_dir()
+{
+_fun=check_dir
+_para="$_fun $*"
+fun_2_log $_para
+
+cDi_error=$1
+cDi_dir=$2
+
+check_input_para $2
+
+first_para ef $cDi_error
+
+echo_log -l "COMMAND: 'ls -ld $cDi_dir'"
+echo_log -l "RESULT:\n"
+
+ls -ld $cDi_dir 1>>$LOG 2>&1
+cDi_result=$?
+
+echo_log -l "\nRETURN CODE: '$cDi_result'\n"
+
+[ $cDi_result != 0 ] && display $cDi_error "Directory '$cDi_dir' doesn't exist"
+}
+
+#FUN
+#FUN INTRACTIVE FUNCTIONS
+#FUN________________________________________________________________________
+#FUN
+
+#F
+#FUNCTION ask4para
+#F
+#F Usage: ask4para [empty] <para> <message> -s
+#F
+#F Print question and get the input for variable
+#F
+#F $1 empty  String can be empty
+#F $1 Parameter
+#F
+#F $2 Question
+#F
+#F $3 Don't print input on screen
+#F
+#F EXAMPLES:
+#F ask4para name "Enter user name" 
+#F ask4para name "Enter user passwd" -s
+#F name=joy
+#F ask4para name "Enter user name"
+#F
+
+ask4para()
+{
+_fun=ask4para
+
+emptyFlag=0
+
+[ $1 = empty ] && { emptyFlag=1 ; shift ; }
+
+a4p_variable=$1
+a4p_prompt=$2
+a4p_sec=$3
+
+check_input_para $2
+#check_input_para $3
+
+a4p_secFlag=0
+sec=
+
+if [ "X$3" = "X-s" ]
+then
+ a4p_secFlag=1
+ sec=", (no echo on screen)"
+fi
+
+eval a4p_data="\$$a4p_variable"
+
+[ $a4p_secFlag = 1 ] && a4p_data=
+# Check that the default is one parameter only
+if [ "X$a4p_data" != "X" ] ;then
+ (echo $a4p_data | egrep ' |\011' >/dev/null 2>&1) &&\
+         display -int "$_firstPar '$_fun'\n'$_para' Need to be one word\n$_para"
+fi
+
+while :; do
+ [ $a4p_secFlag = 1 ] && stty -echo
+ $ECHO "$a4p_prompt$sec [$a4p_data]: \c" |tee -a $LOG
+ read a4p_newAnswer
+ [ $a4p_secFlag = 1 ] && stty echo
+ [ $a4p_secFlag = 1 ] || $ECHO "'$a4p_newAnswer'\n" >>$LOG
+ if (echo $a4p_newAnswer | egrep ' |\011' >/dev/null 2>&1); then
+  :
+ else
+  eval 'if [ "$a4p_newAnswer" ]
+        then
+         '$a4p_variable'=$a4p_newAnswer
+        else
+         a4p_newAnswer=$a4p_data
+        fi'
+  [ $emptyFlag = 1 ] && break
+  [ "$a4p_newAnswer" ] && break
+ fi
+done
+[ $a4p_secFlag = 1 ] && echo
+}
+
+#F
+#FUNCTION ask4string
+#F
+#F Usage: ask4string [empty] <para> <message>
+#F
+#F Print question and get the input for variable
+#F
+#F $1 empty  String can be empty
+#F
+#F $1 Parameter
+#F
+#F $2 Question
+#F
+#F EXAMPLES:
+#F ask4string stringA "Enter line"
+#F stringA ="welcome to home"
+#F ask4string stringA "Enter line" 
+#F
+
+
+ask4string()
+{
+_fun=ask4string
+
+emptyFlag=0
+
+[ $1 = empty ] && { emptyFlag=1 ; shift ; }
+
+a4s_variable=$1
+a4s_prompt=$2
+
+check_input_para $2
+
+eval a4s_data="\$$a4s_variable"
+
+while :; do
+ $ECHO "$a4s_prompt [$a4s_data]: \c" |tee -a $LOG
+ read a4s_newAnswer
+ $ECHO "'$a4s_newAnswer'\n" >>$LOG
+ eval 'if [ "$a4s_newAnswer" ]
+       then
+        '$a4s_variable'=$a4s_newAnswer
+       else
+        a4s_newAnswer=$a4s_data
+       fi'
+ [ $emptyFlag = 1 ] && break
+ [ "$a4s_newAnswer" ] && break
+done
+}
+
+#F
+#FUNCTION ask4value
+#F
+#F Usage: ask4value <para> "<allows list>" <message string>
+#F
+#F Choose value from list
+#F
+#F $1 Parameter
+#F
+#F $2 list of values
+#F
+#F $3 Question 
+#F
+#F EXAMPLES:
+#F ask4value value "a b c" "Choose one of the letters"
+#F
+
+ask4value()
+{
+_fun=ask4value
+
+a4v_variable=$1
+a4v_allowed=$2
+a4v_prompt=$3
+
+check_input_para $2
+check_input_para $3
+
+eval a4v_data="\$$a4v_variable"
+
+# Check that the default is word in the allowed list
+if [ "X$a4d_data" != "X" ]; then
+ (echo $a4v_allowed | grep $a4v_data 1>/dev/null 2>&1) || display -int "$_secondPar '$_fun'\n'$_para'"
+fi
+
+a4v_foundFlag=0
+while [ 1 ]; do
+ printf "$a4v_prompt \"$a4v_allowed\" [$a4v_data]: " | tee -a $LOG
+ read a4v_newAnswer
+ $ECHO "'$a4v_newAnswer'\n" >>$LOG
+ [ "X$a4v_newAnswer" = "X" ] && eval 'a4v_newAnswer="$'"$a4v_variable"'"'
+
+ for possibleValue in $a4v_allowed; do
+  if [ "$a4v_newAnswer" = $possibleValue ]; then 
+   a4v_foundFlag=1
+   break
+  fi
+ done
+ if [ $a4v_foundFlag = 1 ]; then
+  [ "$a4v_newAnswer" ] && break
+ fi
+done
+
+eval 'if [ "$a4v_newAnswer" ]
+      then
+       '$a4v_variable'=$a4v_newAnswer
+      else
+       a4v_newAnswer="$'"$a4v_variable"'"
+      fi'
+}
+
+#F
+#FUNCTION ask4values
+#F
+#F Usage: ask4values <para> "<allows list>" <message string>
+#F
+#F Choose values from list
+#F
+#F $1 Parameter
+#F
+#F $2 list of values
+#F
+#F $3 Question
+#F
+#F EXAMPLES:
+#F ask4values value "a b c d e" "Choose same letters from list"
+#F
+
+ask4values()
+{
+_fun=ask4values
+
+a4V_variable=$1
+a4V_allowed=$2
+a4V_prompt=$3
+
+check_input_para $2
+check_input_para $3
+
+eval a4V_data="\$$a4V_variable"
+
+# Check that the default are words in the allowed list
+if [ "X$a4V_data" != "X" ]; then
+ a4V_foundFlag=0
+  for l in $a4V_data; do
+   ( echo " $a4V_allowed " | grep " $l " 1>/dev/null 2>&1) || { a4V_foundFlag=1 ; break ; }
+  done
+  [ $a4V_foundFlag = 1 ] && display -int "$_secondPar '$_fun'\n'$_para'"
+fi
+
+while [ 1 ]; do
+ printf "$a4V_prompt \"$a4V_allowed\" [$a4V_data]: " | tee -a $LOG
+ read a4V_newAnswer
+ $ECHO "'$a4V_newAnswer'\n" >>$LOG
+ [ "X$a4V_newAnswer" = "X" ] && a4V_newAnswer=$a4V_data
+ if [ "X$a4V_newAnswer" != "X" ]; then
+  a4V_foundFlag=0
+  for l in $a4V_newAnswer; do
+   ( echo " $a4V_allowed " | grep " $l " 1>/dev/null 2>&1) || { a4V_foundFlag=1 ; break ; }
+  done
+  [ $a4V_foundFlag = 0 ] && { eval $a4V_variable=\$a4V_newAnswer ; break ; } 
+ fi
+done
+a4V_newAnswer=`echo "$a4V_newAnswer" | tr ' ' '\n' | uniq`  
+eval $a4V_variable=\$a4V_newAnswer
+$ECHO "$a4V_variable='$a4V_newAnswer'\n" >>$LOG
+}
+
+#F
+#FUNCTION ask4any
+#F
+#F Usage: ask4any [<mesag>]
+#F 
+#F Choose any key 
+#F
+#F $1  Question can be y/n
+#F
+#F EXAMPLES:
+#F ask4any "Press any key to continue"
+#F
+
+ask4any()
+{
+	_fun=ask4any
+
+	a4a_mesg=$1
+
+	[ "X$a4a_mesg" = "X" ] && a4a_mesg="Press any key to continue"
+
+	echo -e "$blue$a4a_mesg: \b$end_color" | tee -a $LOG
+	read a
+	echo "Pressed: '$a'" >>$LOG
+}
+
+#F
+#FUNCTION ask4yes_no
+#F
+#F Usage: ask4yes_no <para> [<mesag>]
+#F 
+#F Choose y for yes or n for n
+#F
+#F $1  Parameter
+#F
+#F $2  Question can be y/n
+#F
+#F EXAMPLES:
+#F ask4yes_no continue
+#F ask4yes_no continue "Press n for exit"
+#F continue=y
+#F ask4yes_no continue "Press n for exit"
+#F
+
+ask4yes_no()
+{
+_fun=ask4yes_no
+
+a4y_yesNo=$1
+a4y_mesg=$2
+
+#check_input_para $2
+
+[ "X$a4y_mesg" = "X" ] && a4y_mesg="Is it correct"
+
+ask4value $a4y_yesNo "y n" "$a4y_mesg"
+}
+
+#F
+#FUNCTION ask4only_yes_or_exit
+#F
+#F Usage: ask4only_yes_or_exit [<mesag>]
+#F 
+#F Choose y for yes or n for n
+#F
+#F $1  message
+#F
+#F EXAMPLES:
+#F ask4only_yes_or_exit
+#F ask4only_yes_or_exit "VM running"
+#F
+
+ask4only_yes_or_exit()
+{
+	_fun=ask4only_yes_or_exit
+
+	a4o_mesg=$1
+	a4o_yesNo=y
+
+	[[ -n $a4o_mesg ]] && a4o_mesg="$a4o_mesg. Do you want to continue?(y/n)"
+	[[ -z $a4o_mesg ]] && a4o_mesg="Do you want to continue?(y/n)"
+
+	printf "\n$a4o_mesg: " | tee -a $LOG
+	read a4o_ans
+	$ECHO $a4o_ans >>$LOG
+	$ECHO
+	if [[ $a4o_ans != y ]]; then
+		exitScriptFlag=1
+		exit 0
+	fi
+}
+
+#F
+#FUNCTION ask4only_yes_or_exit_error
+#F
+#F Usage: ask4only_yes_or_exit [<mesag>]
+#F 
+#F Choose y for yes or n for n
+#F
+#F $1  message
+#F
+#F EXAMPLES:
+#F ask4only_yes_or_exit
+#F ask4only_yes_or_exit "VM running"
+#F
+
+ask4only_yes_or_exit_error()
+{
+	_fun=ask4only_yes_or_exit_error
+
+	a4e_mesg=$1
+
+	[[ -n $a4e_mesg ]] && a4e_mesg="$a4e_mesg. Do you want to continue?(y/n)"
+	[[ -z $a4e_mesg ]] && a4e_mesg="Do you want to continue?(y/n)"
+
+	printf "\n$a4e_mesg: " | tee -a $LOG
+	read a4e_ans
+	$ECHO $a4e_ans >>$LOG
+	$ECHO
+	[[ $a4e_ans != y ]] && display -Ee "Exit with error"
+}
+
+#FUN
+#FUN EXTERNAL UTILITIES FUNCTIONS
+#FUN________________________________________________________________________
+#FUN
+
+#F
+#FUNCTION at_exit
+#F
+#F Runs the function on exit
+#F
+#F Fill the function on the main script
+#F Running more action before exit
+#F EXAMPLES:
+#F at_exit()
+#F {
+#F # Remove file at exit
+#F rm -rf fileA
+#F 
+#F }
+#F
+
+at_exit()
+{
+:
+}
+
+#FUN
+#FUN INTERNAL UTILITIES FUNCTIONS
+#FUN________________________________________________________________________
+#FUN
+
+#F
+#FUNCTION run_start
+#F
+#F Usage: run_start [-Pnp[discription line]]
+#F
+#F Headre for command not from function
+#F End with run_end 
+#F
+#F $1 = -p  Print next $1 to screen
+#F $1  message line
+#F  P  start propeller
+#F  n  New line
+#F 
+#F EXAMPLES:
+#F run_start -p "Opening gzip file" "ls file"
+#F
+#F run_start "Opening gzip file"
+#F tar xvf - | (cd /tmp; tar xvf -)
+#F 
+
+run_start()
+{
+_fun=run_start
+
+ruS_printMesgFlag=0
+ruS_propellerFlag=0
+ruS_newLine=
+
+( echo "X$1" | grep p 1>/dev/null 2>&1 ) && ruS_printMesgFlag=1
+( echo "X$1" | grep P 1>/dev/null 2>&1 ) && ruS_propellerFlag=1
+( echo "X$1" | grep n 1>/dev/null 2>&1 ) && ruS_newLine='\n'
+
+[ $ruS_printMesgFlag = 1 -o $ruS_propellerFlag = 1 ] && ruS_mesg=$2 || ruS_mesg=$1
+[ $ruS_propellerFlag = 1 ] && start_propeller
+ 
+[ $ruS_printMesgFlag = 1 ] && ruS_log= || ruS_log=-l
+
+echo_log $ruS_log "$ruS_newLine$ruS_mesg"
+
+echo_log -l "$_line"
+echo_log -l "RESULT:\n"
+
+}
+
+#F
+#FUNCTION run_end
+#F
+#F Usage: run_end -{E|W|N}[ef]  [-R"<return code>"] <Return code> <discription line>
+#F 
+#F Tail for command not from function
+#F Begine with run_start
+#F
+#F $1  -{E|W|N}[ef]
+#F W   WARNING
+#F E   ERROR
+#F N   Don't Check return code
+#F e   In case of error or warning exit
+#F f   Disable flag WARNING or ERROR
+#F [-R"<return code> <return code>"]  Return code which can be ok
+#F
+#F $2  Return code for the command
+#F $3  Line includes the command 
+#F
+#F EXAMPLES:
+#F tar xvf - | (cd /tmp; tar xvf -)
+#F run_end -Ee $? "openning gzip file"
+#F
+#F run_end -E -R12 $? "While openning gzip file" 
+#F run_end -Ee -R"0 32 99"  "While openning gzip file"
+#F
+
+run_end()
+{
+_fun=run_end
+ruE_error=$1
+
+ruE_returnCodeFlag=0
+
+# Check if the return code can be differ then 0
+
+if (echo "X$2" | grep "X-R" 1>/dev/null 2>&1); then
+	ruE_returnCode=`echo "X$2" | sed -e 's/X-R//' -e 's/-/ /' -e 's/X//'`
+	ruE_returnCodeFlag=1
+	shift
+fi
+
+ruE_result=$2
+ruE_com=$3
+
+check_input_para $2
+check_input_para $3
+
+test_error=`echo X$ruE_error | egrep 'X-E|X-W|X-N'`
+[ $? != 0 ] && display -int "$_firstPar '$_fun'\n'$_fun $*'"
+test_error=`echo X$ruE_error | $TR -d XEWNRef-`
+[ "X$test_error" != "X" ] && display -int "$_firstPar '$_fun'\n'$_fun $*'"
+
+echo_log -l "\nRETURN CODE: '$ruE_result'"
+
+stop_propeller
+
+ruE_message="While $ruE_com'"
+
+if [ $ruE_returnCodeFlag = 1 ]; then
+	echo "RETURN CODE FOR LAST COMMAND CAN BE: '$ruE_returnCode'\n" >>$LOG
+	ruE_okFlag=0
+	for ruE_r in `echo $ruE_returnCode`; do
+		[ $ruE_result = $ruE_r ] && ruE_okFlag=1
+	done
+	[ $ruE_okFlag = 0 ] && display $ruE_error "$ruE_message"
+else
+	[ $ruE_result != 0 ] && display $ruE_error "$ruE_message"
+fi
+}
+
+#F
+#FUNCTION interrupt
+#F
+#F Interupt - routine to catch <cntl> C issued by the user,
+#F            so we can clean up the mess before terminating.
+#F
+
+interrupt()
+{
+_fun=interrupt
+
+#$ECHO "Do you really want to quit? [y/n] \c"
+#while :
+#do
+# read ANS
+# case "$ANS" in
+#"y"|"Y")
+#
+ #     echo_log -ls "\nTerminating on user's request..."
+
+      trap 'global_exit' 0 1 3 14 15
+      exit
+ #     ;;
+ #"n"|"N")
+ #     break
+ #     ;;
+ #      *)
+#
+ #     echo_log -ls "invalid response. [y/n] : \c"
+#
+#     ;;
+# esac
+#done
+return
+}
+
+#F
+#FUNCTION killProc
+#F
+
+killProc()
+{
+#_fun=killProcs
+killed=`echo $*`
+#echo_log -l "\nKilling processes '$killed'\n"
+to_null
+(kill -9 $killed 1>/dev/null 2>&1)
+#to_tty
+sleep 1
+}
+
+#F
+#FUNCTION start_function
+#F
+
+start_function()
+{
+	heF_out_fun_name=$fun_name
+	heF_fun_name=$1
+	shift
+	heF_fun=start_function
+
+	[ "X$heF_fun_name" = "X" ] && display -int "$_firstPar '$heF_fun'\n'$heF_fun $*'"
+	
+	$ECHO "\n%%%%%%%%%%%%%% START FUNCTION:  $_scriptName -->start $heF_fun_name()" >>$LOG
+	echo "Parameters: '$_para_fun_list'" >>$LOG
+	$ECHO "$_leqe\n" >>$LOG
+	$ECHO "$heF_fun_name" >> $_function_header_file
+	if [[ -n $1 ]]; then
+		if [[ "X$1" = "X-l" ]]; then
+		 	shift
+		 	heF_log='-l'
+		 else
+			heF_log=
+		fi
+		echo_log $heF_log "\n** $heF_fun_name(): $* "
+	fi	 
+}
+
+para_fun_l()
+{
+	set +f
+	_para_fun_list="$*"
+	set -f
+}
+
+#F
+#FUNCTION end_function
+#F
+
+end_function()
+{
+
+last_fun_name=`tail -1 $_function_header_file`
+sed -i "/$last_fun_name/d" $_function_header_file
+
+#[ "X$fun_name" = "X" ] && display -int "$_firstPar '$enF_fun'\n'$enF_fun $*'"
+
+$ECHO "\n|||||||||||||| END FUNCTION: $_scriptName -->end $last_fun_name()" >>$LOG
+$ECHO "$_leqe\n" >>$LOG
+#fun_name=$heF_out_fun_name
+}
+
+#FUN
+#FUN NETWORK FUNCTION
+#FUN________________________________________________________________________
+#FUN
+
+#F
+#FUNCTION mask2cidr
+#F
+
+function mask2cidr()
+{
+	nbits=0
+	IFS=.
+	for dec in $1 ; do
+   	 case $dec in
+   		255) let nbits+=8;;
+   		254) let nbits+=7;;
+   		252) let nbits+=6;;
+   		248) let nbits+=5;;
+   		240) let nbits+=4;;
+   		224) let nbits+=3;;
+   		192) let nbits+=2;;
+   		128) let nbits+=1;;
+   	    0)	;;
+   	    *) display -Ee "$dec is not recognised"
+			;;
+   		esac
+	done
+	echo $nbits
+}
+
+#F
+#FUNCTION cidr2mask
+#F
+
+function cidr2mask()
+{	
+	mask=
+	full_octets=$(($1/8))
+	partial_octet=$(($1%8))
+
+	for ((i=0;i<4;i+=1)); do
+		if [ $i -lt $full_octets ]; then
+			mask+=255
+		elif [ $i -eq $full_octets ]; then
+				mask+=$((256 - 2**(8-$partial_octet)))
+		else
+			mask+=0
+		fi  
+		test $i -lt 3 && mask+=.
+	done
+
+	echo $mask
+}
+
+#F
+#FUNCTION fun_2_log
+#F
+
+fun_2_log()
+{
+last_fun_name=`tail -1 $_function_header_file 2>/dev/null`
+$ECHO "\nRUN $last_fun_name(): '$*'" >>$LOG
+$ECHO "$_line" >>$LOG
+}
+
+#F
+#FUNCTION first_para
+#F
+
+first_para()
+{
+	fiP_para=$1
+	fiP_error=$2
+
+	error_EFlag=0
+	error_WFlag=0
+	error_NFlag=0
+	error_OFlag=0
+	error_AFlag=0
+	
+	fiP_fun=`echo $_para | awk '{print $1}'`
+	test_error=`echo X$fiP_error | egrep 'X-E|X-W|X-N|X-O|X-A'`
+	[[ $? != 0 ]] && display -int "$_firstPar '$fiP_fun'\n'$_para' need to add E or W or N or O or A"
+
+	for fiP_com in `echo E W A N O`; do
+		[[ `echo X$fiP_error | grep -c $fiP_com` = 1 ]] && eval error_${fiP_com}Flag=1
+	done
+
+	test_error=`eval "echo X$fiP_error | tr -d XEWNOA${fiP_para}-"`
+	[[ "X$test_error" != "X" ]] && display -int "$_firstPar '$fiP_fun'\n'$_para'"
+
+	okSum=`expr $error_EFlag + $error_WFlag + $error_NFlag + $error_AFlag`
+
+	[[ $error_OFlag = 0 && $okSum -gt 1 ]] && display -int "$_firstPar '$fiP_fun'\n'$_para' One of paramater can be selected O W A E"
+}
+	
+# Function for converting prefix to netmask
+############################################
+
+function cidr2mask()
+{	
+	mask=
+	full_octets=$(($1/8))
+	partial_octet=$(($1%8))
+
+	for ((i=0;i<4;i+=1)); do
+		if [ $i -lt $full_octets ]; then
+			mask+=255
+		elif [ $i -eq $full_octets ]; then
+				mask+=$((256 - 2**(8-$partial_octet)))
+		else
+			mask+=0
+		fi  
+		test $i -lt 3 && mask+=.
+	done
+
+	echo $mask
+}
+
+# Function for checking netmask
+############################################
+
+function mask2cidr()
+{
+	nbits=0
+	IFS=.
+	for dec in $1 ; do
+   	 case $dec in
+   		255) let nbits+=8;;
+   		254) let nbits+=7;;
+   		252) let nbits+=6;;
+   		248) let nbits+=5;;
+   		240) let nbits+=4;;
+   		224) let nbits+=3;;
+   		192) let nbits+=2;;
+   		128) let nbits+=1;;
+   	    0)	;;
+   	    *) mes_error "$dec is not recognised"
+			;;
+   		esac
+	done
+	echo "$nbits"
+}
+
+#FUN
+#FUN INTERNAL FUNCTIONS
+#FUN________________________________________________________________________
+#FUN
+
+#F
+#FUNCTION sed_delimiter
+#F
+
+sed_delimiter()
+{
+sed_fun=sed_delimiter
+
+	sdE_char="/ & ! # % @"
+
+	sdE_string=$1
+	sdE_newString=$2
+
+	for sdE_i in `echo $sdE_char` ; do
+		if ( echo "$sdE_string$sdE_newString" | grep $sdE_i 1>/dev/null 2>&1 ); then
+			:
+		else
+			sdE_del=$sdE_i
+			break
+		fi
+	done
+
+	echo_log -l "Delimeter is: '$sdE_del'"
+
+	[ -z $sdE_del ] && display -Ee "The string includes '$sdE_char' cannot determiaen delimiter"
+}
+
+#F
+#FUN add_line_check_result
+#F
+#F For checking result
+#F
+
+add_line_check_result()
+{
+	alC_result=$1
+	alC_error=$2
+	alC_file=$3
+	
+	[[ $error_NFlag = 1 ]] && return
+	
+	[[ $alC_result != 0 ]] && display ${alC_error}l "While adding line to file '$alC_file'" 
+}
+
+#F
+#FUNCTION replace_check_result
+#F
+#F For checking result
+#F
+
+replace_check_result()
+{
+	rcR_result=$1
+	rcR_error=$2
+	rcR_string=$3
+	rcR_new_string=$4
+	rcR_message=$5
+
+	[[ -z $rcR_message ]] && rcR_message="replacing string" 
+	[[ $error_NFlag = 1 ]] && return
+	
+	[[ $rcR_result != 0 ]] && display ${rcR_error}l "While $rcR_message" 
+}
+
+#F
+#FUNCTION remove_check_result
+#F
+#F For checking result
+#F
+
+remove_check_result()
+{
+	rcR_result=$1
+	rcR_error=$2
+	rcR_error_mesg=$3
+	
+	[[ $error_NFlag = 1 || $rcR_result = 0  ]] && return
+	
+	display ${rcR_error}l "$rcR_error_mesg"
+}
+
+#F
+#FUNCTION command_check_result
+#F
+#F For checking result
+#F
+
+command_check_result()
+{
+	ccR_result=$1
+	ccR_error=$2
+	ccR_command=$3
+	ccR_error_mesg=$4
+	
+	[[ $error_NFlag = 1 || $ccR_result = 0 ]] && return
+	
+	[[ -z $ccR_error_mesg ]] && ccR_error_mesg="While running commad '$ccR_command'"
+	
+	display ${ccR_error}l "While running commad '$ccR_command'"
+}
+
+#F
+#FUNCTION check_log_condition
+#F
+#F For checking condition
+#F
+
+ check_log_condition()
+{
+	cat $log_condition >> $LOG
+	[[ `grep -c 'syntax error near' $log_condition` = 1 ]] && display -Ee 'Syntax error for condition'
+}
+
+#F
+#FUNCTION variable_check_result
+#F
+#F For checking result
+#F
+
+variable_check_result()
+{
+	vcR_error=$1
+	vcR_var=$2
+	vcR_result=$3
+
+	[[ $error_NFlag = 1 ]] && return
+	
+	[[ $vcR_result != 0 ]] && display ${vcR_error}l "While defining variable '$vcR_var'" 
+}
+
+#F
+#FUNCTION variable_check_value
+#F
+#F For checking variable is not null
+#F
+
+variable_check_value()
+{
+	vcV_error=$1
+	vcV_var=$2
+
+	[[ $error_NFlag = 1 || `echo "$1" | grep -c "c"` = 0 ]] && return
+	
+	[[ `echo "$1" | grep -c "s"` = 0 ]] && vcV_to=-l || vcV_to=-ls
+
+	eval "vcV_value=\$$vcV_var"
+	
+	echo_log $vcV_to "@ $vcV_var='$vcV_value'"
+
+	[[ -z $vcV_value ]] && display ${vcV_error}l "No value to variable '$vcV_var'"	
+}
+
+#F
+#FUNCTION variable_show_value
+#F
+#F For show variable and value
+#F
+
+variable_show_value()
+{
+	# variable_show_value -Eel var
+	vsV_error=$1
+	vsV_var=$2
+
+	eval "vsV_value=\$$vsV_var"
+	
+	[[ `echo "X$1" | grep -c "s"` = 0 ]] && vsV_to=-l || vsV_to=-ls
+	
+	echo_log $vsV_to "* $vsV_var='$vsV_value'"
+	
+	echo_log -l "\n"
+}
+
+#F
+#FUNCTION remove_XX
+#F
+#F For variable that doesn't exist
+#F
+
+remove_XX()
+{
+reX_name="$1"
+eval "reX_value=\$$reX_name"
+reX_X=`echo $reX_value | grep -c '^XX'`
+if [[ $reX_X = 1 ]];then
+	reX_value=${reX_value:2:${#reX_value}}
+	eval "$reX_name=\"$reX_value\""
+fi	
+}
+
+#F
+#FUNCTION global_exit
+#F
+#F Runs on exit
+#F
+
+global_exit()
+{
+
+# Run this function befor exit
+
+if [ "X$at_exit_emptyFlag" = "X" ] ;then
+
+	at_exit
+ 
+	trap 0 1 2 3 14 15 
+
+	[ $_warningFlag = 1 ] && echo WARNING_FLAG=1 >> $_WarErrFlaG
+	[ $_errorFlag = 1 ] && echo ERROR_FLAG=1 >> $_WarErrFlaG
+ 
+	if [ $_quitModeFlag = 0 ]; then
+		ERROR_FLAG=0
+		WARNING_FLAG=0
+ 
+		[ -f $_WarErrFlaG ] && . $_WarErrFlaG 1>/dev/null 2>&1
+ 
+		[ "X$NO_MESSAGE_EXIT_FLAG" = "X1" ] && msgScreen=-l
+		[ $ERROR_FLAG = 0 ] && pre="No ERROR" || pre="***ERROR"
+ 
+		echo_log $msgScreen "\n$pre has been found during running."
+ 
+		[ $WARNING_FLAG = 0 ] && pre="No WARNING" || pre="*WARNING"
+ 
+		echo_log $msgScreen "$pre has been found during running.\n"
+ 
+		if [ $exitScriptFlag = 0 ]; then
+			ERROR_FLAG=1
+
+			echo_log $msgScreen "***ERROR: Utility has been terminated\n"
+			touch $exitError 1>/dev/null 2>&1
+			
+		fi
+ 
+		echo_log -l "END TIME: `date '+%H:%M  %m/%d/%y'`" 
+		echo_log -l "====================== END OF SCRIPT $_scriptName ===========================\n"
+		echo_log -s $msgScreen "For more information see '$LOG'\n"
+  
+		[ $ERROR_FLAG = 0 ] && echo_log "${green}SUCCEEDED$end_color"
+	fi
+else
+
+	kill -9 ` ps -ef | grep deploy | awk '{print $2}'` 2>/dev/null
+	trap 0 1 2 3 14 15
+
+fi
+exit `[[ $ERROR_FLAG = 0 ]]`
+}
+
+#F
+#FUNCTION one_process
+#F
+#F exit with flag exitScriptFlag=1
+#F
+
+exit_with_flag()
+{
+_fun=exit_with_flag
+
+exitScriptFlag=1
+
+echo_log -l "exit with flag 'exitScriptFlag=1' with exit status '$1'"
+
+exit $1
+}
+
+#F
+#FUNCTION one_process
+#F
+#F Check that script is runnig once at same time
+#F
+
+one_process()
+{
+_fun=one_process
+
+onP_mesg1="Another process is already running"
+onP_mesg2="Stop this process befor running a new one"
+
+if [ "X$CHECK_ONE_PROCESS" != "XNO" ]; then
+	ps -ef | egrep " $_scriptName\$|/$_scriptName\$" | grep -v grep >> $_one_process
+	oneProcess=`cat $_one_process | wc  -l | tr -d ' '`
+ 
+	[ "X$ONE_PROCESS_NUMBER" = "X" ] && ONE_PROCESS_NUMBER=1
+ 
+	if [ $oneProcess -gt $ONE_PROCESS_NUMBER ]; then
+		at_exit_emptyFlag=1
+
+		echo_log -s "***ERROR: $onP_mesg1\n $onP_mesg2\n"
+
+		exit 1
+	fi
+ 
+	echo_log -l "Check that one process is running for script '$0'"
+	echo_log -l "$_line"
+ 
+	cat $_one_process >>$LOG
+
+	echo_log -l "$_line\n"
+
+fi
+}
+
+#F
+#FUNCTION start
+#F
+#F Runs from script every time at the begining
+#F
+
+start()
+{
+#_fun=start
+
+trap 'global_exit' 0 1 3 14 15
+trap "interrupt" 2
+
+sta_silent=$1
+[ "X$sta_silent" = "X" ] && sta_log=-a || sta_log=-l
+
+echo_log -l "$start_line_script"
+echo_log $sta_log "START TIME: `date`\n\n"
+
+#one_process
+
+initilaze_global_variables
+machine_type
+machine_info
+export_env
+
+return 0
+}
+
+#F
+#FUNCTION propeller
+#F
+#F show \-/-
+#F
+
+propeller()
+{
+#_fun=propeller
+
+while true
+do
+	sleep 1; printf "%s\b" '-'
+	# '\' don't color in notepad ++
+	sleep 1; printf "%s\b" '-'
+	sleep 1; printf "%s\b" '\'
+	sleep 1; printf "|\b"
+	sleep 1; printf "/\b"
+done
+}
+
+#F
+#FUNCTION to_log
+#F
+
+to_log()
+{
+exec 1>>$LOG
+exec 2>>$LOG
+}
+
+#F
+#FUNCTION to_tty
+#F
+
+to_tty()
+{
+exec 1>$_tty
+exec 2>$_tty
+}
+
+#F
+#FUNCTION to_file
+#F
+
+to_file()
+{
+exec 1>$1
+exec 2>$1
+}
+
+#F
+#FUNCTION to_append_file
+#F
+
+to_append_file()
+{
+exec 1>>$1
+exec 2>>$1
+}
+
+#F
+#FUNCTION to_null
+#F
+
+to_null()
+{
+exec 1>/dev/null
+exec 2>/dev/null
+}
+
+#F
+#FUNCTION filter_para
+#F
+
+filter_para()
+{
+	S=
+	for i in `echo $1`; do
+ 		s=`echo X$2 | grep $i`
+ 		[ "X$s" != "X" ] && S="$S$i"
+	done
+	S=`echo $S | tr -d ' '`
+	echo "X-$S" | tr -d 'X'
+}
+
+#F
+#FUNCTION check_error_in_loop
+#F
+
+check_error_in_loop()
+{
+[ -f $exitError ] && exit 1
+}
+check_input_para()
+{
+[ "X$1" = "X" ] && display -int "Parameter is missing in function '$_fun'\n'$_para'"
+}
+
+#F
+#FUNCTION check_error_in_loop
+#F
+
+lsra_log()
+{
+gloB_toLog=
+gloB_toScreen=
+gloB_toReport=
+gloB_toLogFlag=0
+gloB_toScreenFlag=0
+gloB_toReportFlag=0
+
+( echo "X$1" | grep l 1>/dev/null 2>&1 ) && gloB_toLog=l
+( echo "X$1" | grep s 1>/dev/null 2>&1 ) && gloB_toScreen=s
+( echo "X$1" | grep r 1>/dev/null 2>&1 ) && gloB_toReport=r
+( echo "X$1" | grep a 1>/dev/null 2>&1 ) && { gloB_toLog=l ; gloB_toScreen=s ; }
+( echo "X$1" | egrep 'a|r' 1>/dev/null 2>&1 ) && gloB_toReport=r
+[ $REPORT_FLAG = 0 -a "X$gloB_toReport" = "Xr" ] && display -int "Report to report file too, but report file not defined"
+
+[ "X$gloB_toLog" != "X" ] && gloB_toLogFlag=1
+[ "X$gloB_toScreen" != "X" ] && gloB_toScreenFlag=1
+[ "X$gloB_toReport" != "X" ] && gloB_toReportFlag=1
+
+gloB_all=$gloB_toLog$gloB_toScreen$gloB_toReport
+
+gloB_echo=-l
+[ "X$gloB_all" != "X" ] && gloB_echo=-$gloB_all
+
+gloB_report=$gloB_all
+}
+
+#FUN
+#FUN VM FUNCTION
+#FUN
+#FUN________________________________________________________________________
+
+#F
+#FUNCTION virsh_stop
+#F
+
+function virsh_stop()
+{
+	para_fun_l $*; start_function virsh_stop "Preapre for stopping VM '$VM_NAME'"
+
+	virsh_status
+
+	[[ $vm_status = none_exists ]] && return
+	[[ $vm_status = on ]] && mesg="\nVM is running, Need to be stop" || mesg="\nVM exits but not running"
+		
+	[[ "X$1" = "Xdont_ask" ]] || ask4only_yes_or_exit_error "$mesg"
+		
+	run_com_if -Ee "$vm_status = on" "virsh destroy $VM_NAME"
+
+	echo_log -l "Start loop to stop VM '$VM_NAME'"
+	
+	while true; do
+		virsh_status
+		[[ $vm_status = off ]] && break
+		run_com -Ee "sleep 5"
+	done
+
+	echo_log "\nVM '$VM_NAME' is '$vm_status'"
+	 
+	end_function
+}
+
+#F
+#FUNCTION virsh_undefine
+#F
+
+function virsh_undefine()
+{
+	para_fun_l $*; start_function virsh_undefine "Undefine VM '$VM_NAME'"
+
+	virsh_status
+	if [[ $vm_status != none_exists ]]; then
+		[[ -n $1 ]] && ask4only_yes_or_exit_error "\nVM exits and will be removed"
+		virsh_stop dont_ask
+		run_com -Ee "virsh undefine $VM_NAME"
+	fi
+	var -Ee vm_list "virsh list --all | grep -v $VM_NAME"
+	if [[ -n vm_list ]]; then
+		echo_log -l "Another vm running too"
+	else
+		define_var_if_else -Ee isolated_net_status "`virsh net-list --all | grep -c isolated` = 0" "not_running" "running"
+    	run_com_if -N "isolated_net_status = running" "virsh net-destroy isolated"
+    	run_com_if -Ee "isolated_net_status = running" "virsh net-undefine isolated"
+	fi
+	end_function
+}
+
+#F
+#FUNCTION virsh_start
+#F
+
+function virsh_start()
+{
+	para_fun_l $*; start_function virsh_start "Start VM '$VM_NAME'"
+	
+	run_com -N "modprobe -vr vfio_pci"
+	run_com -N "modprobe -vr vfio_iommu_type1"
+	run_com -N "modprobe -v vfio"
+	run_com -N "modprobe -v vfio_pci"
+
+	run_com -Ee "virsh autostart $VM_NAME"
+	run_com -Ee "virsh start $VM_NAME"
+
+	end_function
+}
+
+#F
+#FUNCTION virsh_status
+#
+
+function virsh_status()
+{
+	para_fun_l $*; start_function virsh_status "Check VM '$VM_NAME' status"
+	
+	var -N vs_status_vm "virsh list --all | grep -w $VM_NAME | awk '{print \$NF}'"
+	define_var_if -Ee vs_status_vm "-z vs_status_vm" "none_exists" 
+	case $vs_status_vm in
+		off) 		vm_status=off ;;
+		running) 	vm_status=on ;;
+		*)  		vm_status=none_exists ;;
+	esac
+	echo_log  "\nVM '$VM_NAME' status is '$vm_status'"
+
+	end_function
+}
+
+#FUN
+#FUN DEFINE VARBALES NAD FLAGS FUNCTION
+#FUN
+#FUN________________________________________________________________________
+
+#F
+#FUNCTION machine_type
+#F
+
+function machine_type()
+{
+	#para_fun_l $*; start_function machine_type $sta_log "Get machine type"
+	
+	dell_platform=`dmidecode -t 11 | grep '7\[....\]' | awk '{print $3}' | sed -e 's/\[//' -e 's/\]//'`
+	DMIDECODE_PLATFORM=`dmidecode -t 1 | awk '/Product Name:/ {print $3}'`
+	[[ -z $DMIDECODE_PLATFORM ]] && DMIDECODE_PLATFORM=$dell_platform	
+	machine_type=dell
+	machine_type_group=dell
+	machine_name=Dell
+	
+    if [[ `dmidecode | grep -c "Vendor: Cisco"` = 1 ]]; then
+    	machine_type=cisco
+    	machine_type_group=dell
+    	machine_name=Cisco	
+    elif [[ `dmidecode | grep -c "Vendor: HP"` = 1 ]]; then
+    	machine_type=hp
+    	machine_type_group=hp
+    	machine_name=HP
+	fi
+
+	#end_function
+}
+
+#F
+#FUNCTION initilaze_global_variables
+#F
+
+function initilaze_global_variables()
+{
+	#para_fun_l $*; start_function initilaze_variables "Initilaze global_variables"
+
+	ISO_VERSION=
+	PANG_VERSION=
+	CENTOS_VER=`awk '{print $4}' /etc/redhat-release | awk -F'.' '{print $1"."$2}'`
+	
+	script_name=`basename $0 | awk -F'.' '{print $1}'`
+	CPU_MODEL=`grep 'model name' /proc/cpuinfo | tail -1 | awk -F':' '{print $2}'`
+	CPU_VERSION=`echo "$CPU_MODEL" | awk -F'-' '{print $2}' | awk -F'@' '{print $1}'`
+	TOTAL_MEMORY=`free -g | awk '/Mem/ {print $2}'`
+	TOTAL_CORES=`cat /proc/cpuinfo | grep processor | wc -l`
+	[[ -e /usr/bin/numactl ]] && TOTAL_NUMA=`/usr/bin/numactl --hardware | grep available | awk '{print $2}' 2>/dev/null`
+	[[ $TOTAL_NUMA = 2 ]] && NUMA=yes || NUMA=no
+	lstopo_no_graphics=/usr/bin/lstopo-no-graphics
+	fast=/root/fast-path.env
+	peerapp=/root/peerapp.env
+	temp_xml=/tmp/template_VM.xml
+	temp_xml_file=/tmp/xml_file_VM.xml
+	
+	VD=/vd
+	SSD_GB='[5-9][0-9][0-9].[0-9]* G'
+	REPO=/run/install/repo
+	[[ ! -d $REPO ]] && REPO=/opt
+	
+	LD_LIBRARY_PATH=$REPO/utils
+	LSPCI=$LD_LIBRARY_PATH/lspci
+
+	MegaCli=/opt/utils/MegaCli64
+	MEGACLI=$LD_LIBRARY_PATH/MegaCli64
+	HPSSACLI=$LD_LIBRARY_PATH/hpssacli
+	
+	IPTUNNEL_KO=$LD_LIBRARY_PATH/i40e/ip_tunnel.ko
+	VXLAN_KO=$LD_LIBRARY_PATH/i40e/vxlan.ko
+	I40E_KO=$LD_LIBRARY_PATH/i40e/i40e.ko__3.10.0-123.13.2.el7.x86_64.ko
+
+	disks_file=/tmp/disks
+	system_disks_file=/tmp/system_disks
+	data_disks_file=/tmp/data_disks
+	webcache_disks_file=/tmp/webcache_disks
+	data_webcache_disks_file=/tmp/data_webcache_disks
+	JBOD_disks_file=/tmp/JBOD_disks
+	
+	DIR_NIC=/sys/class/net
+	nic_dir=/etc/sysconfig/network-scripts
+	temp_nics=/tmp/nics
+	whiptail=/tmp/whiptail
+	exec 4>/tmp/whiptail
+	ans_file=/tmp/ans
+	confirmation=/tmp/confirmation
+	
+	VM_IMG_DIR=/opt/VM
+
+	#end_function
+}
+
+#F
+#FUNCTION machine_info
+#F
+
+function machine_info()
+{
+	#para_fun_l $* ; start_function machine_info $sta_log "Machine info"
+	
+	[[ $log_first_time = 1 ]] && return 
+	echo_log -l "Define variables\n"
+
+	echo_log -l "ISO version='$ISO_VERSION'"
+	echo_log -l "Pang version='$PANG_VERSION'"
+	echo_log -l "DMIDECODE_PLATFORM='$DMIDECODE_PLATFORM'"
+	echo_log -l "CPU_MODEL='$CPU_MODEL'"
+	#echo_log -l "TOTAL_NUMA='$TOTAL_NUMA'"
+	echo_log -l "TOTAL_MEMORY='$TOTAL_MEMORY'"
+	echo_log -l "TOTAL_CORES='$TOTAL_CORES'"
+	echo_log -l "CENTOS_VER='$CENTOS_VER'"
+	echo_log -l "machine_type='$machine_type'"
+	echo_log -l "machine_type_group='$machine_type_group'"
+	echo_log -l "machine_name='$machine_name'"
+	[[ $machine_type = dell ]] && echo_log -l "dell_platform='$dell_platform'"
+	echo_log -l "\nnic_cards"
+	$LSPCI | grep -i eth >> $LOG
+	
+	echo_log -l "\nEnd of define variables\n\n"
+	#end_function
+}
+
+#F
+#FUNCTION export_env
+#F
+
+function export_env()
+{
+	#para_fun_l $*; start_function export_env "Export env file"
+
+	[[ -n $1 ]] && exe_error=$1 || exe_error=		
+
+	exe_file=
+	if [[ -e $temp_env ]]; then
+		exe_file=$temp_env
+	elif [[ -e $env_file ]]; then
+		exe_file=$env_file
+	fi
+
+	echo_log -ls "Export env file '$exe_file'"
+
+	if [[ -n $exe_file ]]; then
+		while read line; do
+			echo_log -l "* $line"
+			export $line
+		done < $exe_file
+		#export `cat $exe_file` &>/dev/null
+	else
+		echo_log $exe_error "No env file has been found"
+	fi
+
+	echo_log -ls
+
+	#end_function
+}
+
+#F
+#FUNCTION machine_type_message
+#F
+
+machine_type_message()
+{
+	[[ -n $1 ]] && mtm_para="-$1" || mtm_para=
+	echo_log
+	echo_log $mtm_para "Machine type: $machine_name"
+}
+
+line_exclamtion='!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+line_at='@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@'
+line_hash='########################################################################'
+line_dollar='$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$'
+line_percent='%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+line_caret='^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^'
+line_ampersand='&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&'
+line_astrik='************************************************************************'
+line_dash='-------------------------------------------------------------------------'
+line_plus='++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
+line_underscore='________________________________________________________________________'
+line_equal='========================================================================'
+line_slash='////////////////////////////////////////////////////////////////////////'
+line_backslash='\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\'
+
+start -s
+
+
+# FUNCTIONS for disks
+
+########################################################################################
+
+# Function getting information on controller
+############################################
+
+function get_controller()
+{
+	para_fun_l $*; start_function get_controller "Get information on controller"
+
+	check_var -Ee DMIDECODE_PLATFORM
+	
+	if [[ $DMIDECODE_PLATFORM = OptiPlex ]]; then
+		display -A "$mesage_optiplex"; end_function; return
+	fi
+
+	show_var -Ee machine_type_group
+	
+	if [[ $machine_type_group = dell ]]; then
+		run_com_if_not -Ee "\"`${MEGACLI} cfgdsply -aALL | grep 'Adapter:'`\" = \"Adapter: 0\"" "to_tty; raid_controller_not_found"
+		var -Ee controller "${MEGACLI} cfgdsply -aALL | grep 'Product Name' | cut -d: -f 2 | sed -e 's/^[ \t]*//'"
+
+		show_var -Ee  "controller"
+	else
+		run_com_if_not -Ee "`lsmod | grep -wc sg 2>/dev/null` == 0" "modprobe sg" # needed for running the hpssacli tool
+		run_com_if -Ee "`${HPSSACLI} ctrl all show 2>/dev/null | grep -c P440ar` == 0" "raid_controller_not_found"
+	fi
+
+	end_function
+}
+
+# Function for checking raid controller exists
+############################################
+
+function raid_controller_not_found()
+{	
+	whiptail --yesno --title 'RAID adapter' "No RAID adapter found. Disks will not be configured automatically. $mes_installation" 15 75
+	[ $? != 0 ] && halt_to_exit_config_flag
+}
+
+# Function getting information on controller
+############################################
+
+function set_controller_4_system()
+{
+	para_fun_l $*; start_function set_controller_4_system "Set boot device on controller"
+
+	check_var -Ee DMIDECODE_PLATFORM
+
+	if [[ $DMIDECODE_PLATFORM = OptiPlex ]]; then
+		display -A "$mesage_optiplex"; end_function; return
+	fi
+
+	show_var -Ee machine_type_group
+
+	if [[ $machine_type_group = dell ]]; then
+		# tune RAID disks with disk cache
+		run_com -Ee "${MEGACLI} LDSetProp EnDskCache -LAll -aAll"
+
+		# enable patrol
+		run_com -Ee "${MEGACLI} -AdpPR EnblAuto -aALL"
+		run_com -Ee "${MEGACLI} -AdpSetProp PatrolReadRate 15 -aALL"
+
+		# Initialize all disks
+		run_com -Ee "sleep 2"
+		run_com -Ee "${MEGACLI} LDInit Start -L0 -aAll"
+		run_com -Ee "sleep 2"
+		#run_com -Ee "sfdisk --re-read /dev/sda"
+		run_com -N "lsblk -dnlp | awk '{ print \$1 }' | xargs -n1 sfdisk --re-read"
+	
+		run_com -Ee "${MEGACLI} -AdpBootDrive -set -L0 -a0"
+		run_com -Ee "${MEGACLI} -AdpBootDrive -get -a0 "
+	fi
+
+	end_function
+}
+
+# Function for checking raid controller exists
+############################################
+
+function raid_controller_not_found()
+{	
+	whiptail --msgbox --title 'ERROR' "No RAID adapter found. Disks will not be configured automatically." 15 75
+	halt_or_exit
+}
+
+# Function for prepare disk
+############################################
+
+function reset_controller()
+{
+	para_fun_l $*; start_function reset_controller "Reset scsi controller, clearing Virtual disks"
+	
+	show_var -Ee machine_type_group
+
+	if [[ $machine_type_group = dell ]]; then
+		run_com -Ee "${MEGACLI} cfgclr aAll"
+		run_com -Ee "${MEGACLI} cfglddel lALL aAll"
+		run_com -Ee "${MEGACLI} cfgforeign clear aALL"
+	else
+		run_com -N "${HPSSACLI} controller slot=0 delete forced override"
+	fi
+	
+	end_function
+}
+
+# Function getting STRIPSIZE
+############################################
+
+function get_stripsize()
+{
+	para_fun_l $*; start_function get_stripsize "Get information on stripsize"
+
+	check_var -Ee DMIDECODE_PLATFORM
+	
+	if [[ $DMIDECODE_PLATFORM = OptiPlex ]]; then
+		display -A "$mesage_optiplex"; end_function; return
+
+	fi
+
+	show_var -Ee machine_type_group
+	
+	if [[ $machine_type_group = dell ]]; then
+		define_var -Eel STRIPSIZE "strpsz256"
+		define_var_if -Ee STRIPSIZE "\"$controller\" = 'PERC H330 Mini'" "strpsz64" 
+		define_var_if -Ee STRIPSIZE "\"$controller\" = 'Cisco UCSC RAID SAS 2008M-8i'" "strpsz64"
+		define_var_if -Ee STRIPSIZE "\"$controller\" = 'Cisco 12G SAS Modular Raid Controller'" "strpsz64"
+		
+	else
+		define_var -Eel STRIPSIZE "64"
+	fi
+
+	update_env_file STRIPSIZE
+
+	end_function
+}
+
+# Function getting enclosure
+############################################
+
+function get_enclosure()
+{
+	para_fun_l $*; start_function get_enclosure "Get information on enclosure"
+
+	check_var -Ee DMIDECODE_PLATFORM
+
+	if [[ $DMIDECODE_PLATFORM = OptiPlex ]]; then
+		display -A "$mesage_optiplex"; end_function; return
+	fi
+
+	show_var -Ee machine_type_group
+	
+	if [[ $machine_type_group = dell ]]; then
+		var -Ee ENCLOSURE "${MEGACLI} -PDlist -a0 | grep -A1 'Enclosure Device' | head -1 | awk '{print \$4}'"
+		
+		update_env_file ENCLOSURE
+	else
+		var -Ee PORT_BOX "${HPSSACLI} ctrl slot=0 pd all show detail | grep physicaldrive | tail -1 | awk '{print \$NF}' | awk -F: 'NF{--NF};1' | sed 's/ /:/'"
+
+		update_env_file PORT_BOX
+	fi
+
+	end_function
+}
+
+# Function for creating system/data/free -g | awk '/Mem/ {print \$2}' disk list
+############################################
+
+function get_disks_list()
+{
+	para_fun_l $*; start_function get_disks_list "Get disks list"
+
+	check_var -Ee DMIDECODE_PLATFORM
+
+	if [[ $DMIDECODE_PLATFORM = OptiPlex ]]; then
+		display -A "$mesage_optiplex"; end_function; return
+	fi
+
+	show_var -Ee machine_type_group
+			
+	#Dell/Cisco
+	# Slot: 1 PD: SAS Size: 838.362 GB Firmware state: Online, Spun Up Media: Hard Disk Device	
+	#HP
+	# Bay 1 Type: SAS Size: 1800.3 GB Status: ok 
+	
+	define_var_if_else -Ee slotBay "$machine_type_group = dell" "Slot" "Bay"
+	
+	if [[ $machine_type_group = dell ]]; then
+		run_com -Ee "${MEGACLI} pdlist a0 > $temp1"
+		show_file -Ee $temp1 "Pre raw disks list"
+		
+		run_com -Ee "${MEGACLI} pdlist a0 | egrep 'Slot|Raw|PD|^Firmware|Media:|Media T' > $temp1"
+		show_file -Ee $temp1 "Raw disks list"
+		
+		run_com -Ee "cat $temp1 | sed -e 's/ Number//'  -e 's/ Type//' -e 's/Raw //' -e 's/\[.*\]//' -e 's/Firmware//' -e 's/SATA/SSD/' -e 's/Solid State Device/SATA/' > $temp"
+	else
+		run_com -Ee "${HPSSACLI} ctrl slot=0 pd all show detail > $temp1"
+		show_file -Ee $temp1 "Pre raw disks list"
+		
+		run_com -Ee "${HPSSACLI} ctrl slot=0 pd all show detail | egrep 'Bay|Interface|Size|Drive Type' | egrep -v 'Na|Authentication' > $temp"
+		show_file -Ee $temp "Raw disks list"
+
+		run_com -Ee "cat $temp | sed -e 's/Interface//' -e 's/Drive Type/Drive/' -e 's/Solid State SATA/SATA/' > $temp1"
+		
+		run_com -Ee "rm -f $temp"
+		while read line; do
+			var -N found "echo $line | grep -c Drive"
+			run_com_if_else -Ee "$found = 1" "echo $line | awk '{print \$1\" \"\$2}' >> $temp" "echo $line >> $temp"
+		done < $temp1
+	fi
+
+	run_com -Ee "cat $temp | tr '\n' ' ' | sed \"s/$slotBay/\n$slotBay/g\" | sort -nk 2 | tr -s ' ' | grep $slotBay > $disks_file"
+	
+	if [[ $machine_type = hp ]]; then
+		run_com -Ee "cat $disks_file > $temp"
+		run_com -Ee "awk '{ if (\$6 == \"Solid\") {print \$1\" \"\$2\" \"\$5\" \"\$6\" \"\$7\" \"\$8\" \"\$9\" \"\$10\" \"\$11\" \"\$3\" \"\$4} else {print \$1\" \"\$2\" \"\$5\" \"\$6\" \"\$7\" \"\$8\" \"\$9\" \"\$3\" \"\$4} }' $temp > $disks_file"
+	fi
+	
+	show_file -Ees $disks_file "All disks list file"
+	
+	end_function
+}
+
+# Function for getting  and cahe_web list without disk system
+############################################
+
+function remove_system_disk_from_list()
+{
+	para_fun_l $*; start_function remove_system_disk_from_list "Get number of slot on machine"
+
+	check_var -Ees SYSTEM_DISK_SLOT
+
+	var -Ee system_disk_slot "echo $SYSTEM_DISK_SLOT | tr ',' ' '"
+
+	define_var_if_else -Ee slot "`echo $machine_type_group | grep -c dell` = 1" "Slot" "Bay"
+	define_var_if_else -Ee type "`echo $machine_type_group | grep -c dell` = 1" "PD" "Type"
+	
+	for i in $system_disk_slot; do
+		remove_line_4_file -Ee $disks_file "$slot: $i $type:"
+	done
+
+	run_com -Ee "cp $disks_file $data_webcache_disks_file"
+
+	show_file -Ees  $data_webcache_disks_file "Data and webcache disks list file"
+	
+	end_function
+}
+
+# Function for getting number of slot on scsi
+############################################
+
+function get_number_of_solts()
+{
+	para_fun_l $*; start_function get_number_of_solts "Get number of slot on machine"
+
+	check_var -Ee DMIDECODE_PLATFORM
+
+	if [[ $DMIDECODE_PLATFORM = OptiPlex ]]; then
+		display -A "$mesage_optiplex"; end_function; return
+	fi
+
+	show_var -Ee machine_type_group
+	
+	if [[ $machine_type_group = dell ]]; then
+		var -Ee number_of_solts "${MEGACLI} -EncInfo -a0 | grep -A2 'Enclosure 0:' | awk '/Number of Slots/ {print \$NF}'"
+	else
+		var -Ee number_of_solts "${HPSSACLI} ctrl all show config detail | awk '/Drive Bays:/ {print \$NF}'"
+	fi
+	
+	echo_log "Number of slots on machine: `echo $number_of_solts`"
+	
+	end_function
+}
+
+# Function for getting first and second slot 
+############################################
+
+function first_second_slot()
+{
+	para_fun_l $*; start_function first_second_slot "Get first and second slot for system"
+
+	check_var -Ee DMIDECODE_PLATFORM
+
+	if [[ $DMIDECODE_PLATFORM = OptiPlex ]]; then
+		display -A "$mesage_optiplex"; end_function; return
+	fi
+
+	check_file_exist -Ee $disks_file
+	
+	var -Ee first_slot "head -1 $disks_file | awk '{print \$2}'"
+	define_var_if_else -Ee second_slot "$first_slot = 0 " "1" "2"
+	
+	if [[ $number_of_solts = 26 ]]; then
+
+		echo_log "Macine is Dell R730; system disks are in back"
+		
+		define_var -Ee first_slot "25"
+		define_var -Ee second_slot "24"
+	fi
+
+	show_var -Ees first_slot
+	show_var -Ees second_slot
+	
+	end_function
+}
+
+# Function for getting size disk1 disk2
+############################################
+
+function find_number_physical_system_disks()
+{
+	para_fun_l $*; start_function find_number_physical_system_disks "Find number of physical disks"
+
+	check_var -Ee DMIDECODE_PLATFORM
+
+	if [[ $DMIDECODE_PLATFORM = OptiPlex ]]; then
+		display -A "$mesage_optiplex"; end_function; return
+	fi
+
+	show_var -Ee SYSTEM_DISKS_NUM
+	reset_var -Ee line2
+
+	var -N line1 "grep \" $first_slot \" $disks_file"
+	var_if -N line2 "$SYSTEM_DISKS_NUM = 2" "grep \" $second_slot \" $disks_file"
+
+	if [[ -n $line1 && -n $line2 ]]; then
+		system_disks_num=2
+	elif [[ -n $line1 && -z $line2 ]]; then
+		system_disks_num=1
+	elif [[ -z $line1 && -n $line2 ]]; then
+		system_disks_num=1
+		line1=$line2
+		first_slot=$second_slot
+	else
+		display -Ee "No system disks have been found"
+	fi
+
+	show_var -Ee system_disks_num
+
+	end_function
+}
+
+# Function for getting size disk1 disk2
+############################################
+
+function get_information_on_system_disk()
+{
+	para_fun_l $*; start_function  "Get information on system disk"
+
+	check_var -Ee DMIDECODE_PLATFORM
+
+	define_var -Ee one_system_diskFlag "0"
+	
+	if [[ $DMIDECODE_PLATFORM = OptiPlex ]]; then
+		define_var -Ee one_system_diskFlag "0"
+		define_var -Ee SSD_systemFlag "1"
+		var -Ee system_size_GT_1 "fdisk -l | grep 'sda:'| awk '{print \$3\$4}'"
+		var -N system_disk_T_1 "echo \"$system_size_GT_1\" | grep -c TB"
+		var -N system_size_G_1 "echo \"$system_size_GT_1\" | awk '/GB/ { split(\$1,a,\".\"); print a[1]; }'"
+		define_var -Ee SYSTEM_DISK_SLOT "/dev/sda"
+		define_var -Ee SYSTEM_DISK_TYPE "SSD"
+		update_env_file SYSTEM_DISK_TYPE
+		end_function; return
+	fi
+
+	echo_log -l "\nFirst system disk"
+	
+	show_var -Ee line1
+	var -Ee system_disk_type_1 "echo \"$line1\" | awk '{print \$4}'"
+	var -Ee system_size_GT_1 "echo \"$line1\" | awk '{print \$6\$7}'"
+	var -N system_disk_T_1 "echo \"$line1\" | grep -c TB"
+	var -N system_size_G_1 "echo \"$line1\" | awk '/GB/ { split(\$6,a,\".\"); print a[1]; }'"
+	var -Ee system_disk_slot_1 "echo \"$line1\" | awk '{print \$2}'"
+	define_var -Ee SYSTEM_DISK_SLOT "$system_disk_slot_1"
+	define_var_if -N system_disk_type_1 "`echo \"$line1\" | grep -c Solid` = 1"  "SSD"
+	define_var_if_else -Ee SSD_systemFlag "$system_disk_type_1 = SSD" "1" "0"
+	
+	run_com -Ee "fgrep \"$line1\" $disks_file > $system_disks_file"
+	define_var -Ee SYSTEM_DISK_SLOT "$system_disk_slot_1"
+
+	if [[ $SYSTEM_DISKS_NUM = 2 && $system_disks_num = 2 ]]; then
+	
+		echo_log -l "Second system disk"
+
+		show_var -Ee line2
+		define_var -Ee one_system_diskFlag "1"
+		var -Ee system_disk_type_2 "echo \"$line2\" | awk '{print \$4}'"
+		var -Ee system_size_GT_2 "echo \"$line2\" | awk '{print \$6\$7}'"
+		var -N system_disk_T_2 "echo \"$line2\" | grep -c TB"
+		var -N system_size_G_2 "echo \"$line2\" | awk '/GB/ { split(\$6,a,\".\"); print a[1]; }'"
+		var -Ee system_disk_slot_2 "echo \"$line2\" | awk '{print \$2}'"
+		define_var -Ee SYSTEM_DISK_SLOT "$system_disk_slot_2"
+		define_var_if -N system_disk_type_2 "`echo \"$line2\" | grep -c Solid` = 1" "SSD"
+
+		run_com -Ee "fgrep \"$line2\" $disks_file >> $system_disks_file"
+		define_var -Ee SYSTEM_DISK_SLOT "$system_disk_slot_1,$system_disk_slot_2"
+	fi
+
+	show_var -Ee line1
+	show_var -Ee one_system_diskFlag
+	show_var -Ee system_size_GT_1
+	show_var -Ee system_size_G_1
+	show_var -Ee system_disk_slot_1
+	show_var -Ee system_disk_type_1
+	show_var -Ee SSD_systemFlag
+
+	if [[ $SYSTEM_DISKS_NUM = 2 ]]; then
+		show_var -Ee line2
+		show_var -Ee system_size_GT_2
+		show_var -Ee system_disk_T_2
+		show_var -Ee system_size_G_2
+		show_var -Ee system_disk_slot_2
+		show_var -Ee system_disk_type_2
+	fi
+
+	update_env_file SYSTEM_DISK_SLOT
+
+	define_var -Ee SYSTEM_DISK_TYPE "$system_disk_type_1"
+	update_env_file SYSTEM_DISK_TYPE
+
+	show_file -Ees $system_disks_file "System disks list file"
+
+	end_function
+}
+
+# Function show disk property
+############################################
+
+function show_disk_property_list()
+{
+	para_fun_l $*; start_function show_disk_property_list "Show disk list"
+
+	check_var -Ee DMIDECODE_PLATFORM
+
+	if [[ $DMIDECODE_PLATFORM = OptiPlex ]]; then
+		display -A "$mesage_optiplex"; end_function; return
+	fi
+	
+	[[ $SSD_systemFlag = 1 ]] && ssd_mes="\n      System disk is SSD. One of the system disk partition will be used for Webcache on VM" || ssd=
+	
+	show_file -Ees $disks_file "All disks list on controller file"
+	show_file -Ees $system_disks_file "System disks list file"
+	
+	echo_log "Number of slots on machine: `echo $number_of_solts`"
+	echo_log "System disk type: '$system_disk_type_1'"
+	echo_log "Slot system disk lists: '`echo $SYSTEM_DISK_SLOT`'"
+	
+	if [[ $SYSTEM_DISKS_NUM = 2 && $system_disks_num = 1 ]]; then
+		display -Ee "You choose 2 disks system but you have one on slot '$first_slot'"
+	fi
+
+	end_function
+}
+
+########################################################################################
+
+# Function for rescan controller
+############################################
+
+function rescan_controller()
+{
+	para_fun_l $*; start_function rescan_controller "Rescan for finding disks"
+
+	check_var -Ee DMIDECODE_PLATFORM
+
+	if [[ $DMIDECODE_PLATFORM = OptiPlex ]]; then
+		display -A "$mesage_optiplex"; end_function; return
+	fi
+
+	show_var -Ee machine_type_group
+	
+	if [[ $machine_type_group = dell ]]; then
+		
+		run_com -Ee "${MEGACLI} -CfgForeign -Scan -a0"
+		run_com -Ee "${MEGACLI} -CfgForeign -Clear -a0"
+		run_com -Ee "${MEGACLI} -DiscardPreservedCache -Lall -aAll"
+
+		run_com -Ee "${MEGACLI} LDInfo -LAll -aAll"
+	else
+		run_com -Ee "${HPSSACLI} rescan" 
+		run_com -Ee "${HPSSACLI} controller slot=0 show config"
+	fi
+
+	end_function
+}
+
+# Function preparing disk
+############################################
+
+function prepare_disk()
+{
+	para_fun_l $*; start_function prepare_disk "Prepare disk slot '$2' as '$1'"
+
+	check_var -Ee DMIDECODE_PLATFORM
+
+	if [[ $DMIDECODE_PLATFORM = OptiPlex ]]; then
+		display -A "$mesage_optiplex"; end_function; return
+	fi
+
+	show_var -Ee machine_type_group	
+	define_var -Ee disk_type $1 
+	define_var -Ee list_num_slot $2
+	
+	if [[ $list_num_slot = NO-DISKS ]]; then
+		echo_log -Wf "No WEBCACHE disks"; end_function; return
+	fi
+
+	if [[ $machine_type_group = dell ]]; then
+		check_var -Ee ENCLOSURE
+	else
+		check_var -Ee PORT_BOX
+	fi
+	
+	reset_var -Ee second_disk
+	define_var -Ee raid "0"
+
+	var -Ee num_slot_1 "echo $list_num_slot | awk -F',' '{print \$1}'"
+	
+	if [[ $disk_type = system ]]; then 
+		var -N num_slot_2 "echo $list_num_slot | awk -F',' '{print \$2}'"
+ 
+		define_var_if -Ee raid "\"X$num_slot_2\" != X" "1"
+
+		if [[ $machine_type_group = dell ]]; then
+			define_var_if -Ee second_disk "`echo \"$num_slot_2\" | grep -c [0-9]` != 0" ",$ENCLOSURE:$num_slot_2"
+		else
+			define_var_if -Ee second_disk "`echo \"$num_slot_2\" | grep -c [0-9]` != 0" ",$PORT_BOX:$num_slot_2"		 
+		fi
+	fi
+
+	if [[ $machine_type_group = dell ]]; then
+		define_var -Ee enclosure_disk "$ENCLOSURE:${num_slot_1}$second_disk"
+	else
+		define_var -Ee PORT_BOX_slot "$PORT_BOX:${num_slot_1}$second_disk"
+	fi
+
+	rescan_controller
+
+	if [[ $machine_type_group = dell ]]; then	
+		case $disk_type in
+			system|data)	define_var -Ee strip "CachedBadBBU $STRIPSIZE a0" ;;
+			webcache)		define_var -Ee strip "strpsz64 a0" ;;
+		esac		
+		run_com -Ee "${MEGACLI} cfgldadd r$raid[$enclosure_disk] WB NORA Direct $strip" -R "0 3 26"
+		var_if -Ee virtual_number "$disk_type = webcache" "${MEGACLI} -LdPdInfo -a0 | grep -A1 -w \"Slot Number: $num_slot_1\" | awk -F ':' '{ split(\$3,a,\",\"); print a[1]; }' | tr -d '\n' | tr -d ' '" 
+		run_com_if -Ee "$disk_type = webcache" "${MEGACLI} -LDSetProp -EnDskCache -L$virtual_number -a0"
+	else
+		case $disk_type in
+			system)	 	define_var -Ee strip "stripsize=64" ;;
+			data)		define_var -Ee strip "stripsize=256" ;;
+			webcache)	define_var -Ee strip "stripsize=64 forced" ;;
+		esac
+		run_com -Ee "${HPSSACLI} ctrl slot=0 create type=ld drives=$PORT_BOX_slot raid=$raid $strip"
+	fi
+
+	end_function
+}
+
+# Function for creating data disk list
+############################################
+
+function prepare_data_disk_list()
+{
+	para_fun_l $*; start_function prepare_data_disk_list "Create data disks list"
+			
+	run_com -N "egrep \"SAS|TB|$SSD_GB\" $data_webcache_disks_file > $data_disks_file"
+	var -Ee data_disks_size_GT "awk '{print \$6\$7}' $data_disks_file"
+	var -N data_disks_size_T "awk '/TB/ {print \$6}' $data_disks_file | awk -F '.' '{print \$1}'"
+	var -N data_disks_size_G "awk '/GB/ {print \$6}' $data_disks_file | awk -F '.' '{print \$1}'"
+	var -Ee DATA_DISKS_SLOT_LIST "awk '{print \$2}' $data_disks_file | tr '\n' ' '"	
+	define_var_if -Ee DATA_DISKS_SLOT_LIST "\"X$DATA_DISKS_SLOT_LIST\" = X" "NO-DISKS"
+	
+	replace_char_by_char_4_var -Ee DATA_DISKS_SLOT_LIST 'space' ','
+	remove_last_char_4_var -Ee DATA_DISKS_SLOT_LIST ","
+
+	display_if -Ee "$DATA_DISKS_SLOT_LIST = NO-DISKS" "No data disks have been found"
+
+	update_env_file DATA_DISKS_SLOT_LIST
+	echo_log_var -r DATA_DISKS_SLOT_LIST
+
+	define_var_if_else -Ee DATA_DISK_TYPE "`grep -c SSD $data_disks_file` = 0" "SAS" "SSD"
+
+	update_env_file DATA_DISK_TYPE
+	echo_log_var -r DATA_DISK_TYPE
+
+	show_file -Ees $data_disks_file "Disks data list file"
+
+	end_function
+}
+
+# Function for checking that data disks size are the same 
+############################################
+
+function check_data_disks_same_size()
+{
+	para_fun_l $*; start_function check_data_disks_same_size "Check data disks are same size"
+
+	var -N more_then_one "echo $data_disks_size_GT | tr ' ' '\n' | sort -u | sed -n 2p"
+
+	[[ -n $more_then_one ]] && display -W "Not all data disks have the same size"
+
+	end_function
+}
+
+# Function for creating web cache disk list
+############################################
+
+function prepare_webcache_disk_list()
+{
+	para_fun_l $*; start_function prepare_webcache_disk_list "Create web cache list"
+		
+	run_com -N "grep SSD $data_webcache_disks_file | grep GB | grep -v \"$SSD_GB\" > $webcache_disks_file"
+
+	if [[ ! -s $webcache_disks_file ]]; then
+		define_var -Ee WEBCACHE_DISKS_SLOT_LIST "NO-DISKS"
+	else	
+		var -Ee webcache_disks_size_GT "awk '{print \$6\$7}' $webcache_disks_file"
+		var -Ee webcache_disks_size "echo $webcache_disks_size_GT | grep G | tr -d 'GB'"
+		var -Ee WEBCACHE_DISKS_SLOT_LIST "awk '{print \$2}' $webcache_disks_file | tr '\n' ' '"
+		define_var_if -Ee WEBCACHE_DISKS_SLOT_LIST "\"X$WEBCACHE_DISKS_SLOT_LIST\" = X" "NO-DISK"
+
+		replace_char_by_char_4_var -Ee WEBCACHE_DISKS_SLOT_LIST 'space' ','
+		remove_last_char_4_var -Ee WEBCACHE_DISKS_SLOT_LIST ","
+	fi
+
+	update_env_file WEBCACHE_DISKS_SLOT_LIST
+	echo_log_var -r WEBCACHE_DISKS_SLOT_LIST
+
+	show_file -Ees $webcache_disks_file "Webcache disks list file"
+		
+	end_function
+}
+
+# Function for creating SSD disk list
+############################################
+
+function prepare_ssd_disk_list()
+{
+	para_fun_l $*; start_function prepare_ssd_disk_list "Create SSD disk list"
+		
+	run_com -N "grep 'Solid State Device' $data_webcache_disks_file > $ssd_disks_file"
+	var -Ee SSD_DISKS_SLOT_LIST "cat $ssd_disks_file | awk '{print \$2}' | tr '\n' ' '"
+	define_var_if -Ee SSD_DISKS_SLOT_LIST "\"X$SSD_DISKS_SLOT_LIST\" = X" "NO-DISKS"
+
+	replace_char_by_char_4_var -Ee SSD_DISKS_SLOT_LIST 'space' ','
+	remove_last_char_4_var -Ee SSD_DISKS_SLOT_LIST ","
+
+	update_env_file SSD_DISKS_SLOT_LIST
+
+	show_file -Ees $ssd_disks_file "SSD disks list file"
+	show_var -Ee SSD_DISKS_SLOT_LIST
+		
+	end_function
+}
+
+# Function for creating JBOD list
+############################################
+
+function prepare_JBOD_disk_list()
+{
+	para_fun_l $*; start_function prepare_JBOD_disk_list "Create JBOD list"
+
+	show_var -Ee machine_type_group
+	
+	if [[ $machine_type_group = hp ]]; then
+		display -A "Will not run on HP"; end_function; return
+	fi
+	
+	run_com -N "grep JBOD $disks_file > $JBOD_disks_file"
+	var -N JBOD_disks_slot "awk '/JBOD/ {print \$2}' $disks_file"
+	
+	show_file -Ees  $JBOD_disks_file "JBOD disks list file"
+			
+	end_function
+}
+
+# Function for creating JBOD disk as ready to RAID
+############################################
+
+function reset_JBOD_disk()
+{
+	para_fun_l $*; start_function reset_JBOD_disk "Convert JBOD disk to raid disk"
+
+	if [[ $machine_type_group = hp ]]; then
+		display -A "Will not run on HP"; end_function; return
+	fi
+
+	check_var -Ee MEGACLI
+	check_var -Ee ENCLOSURE
+	
+	for i in `echo $JBOD_disks_slot`; do
+		run_com  -Ee "${MEGACLI} -PDMakeGood -Physdrv [$ENCLOSURE:$i] -force -a0"
+	done
+	
+	echo_log -l "Check disk are not in JBOD mode"
+	
+	var -N jbod "${MEGACLI} pdlist a0 | grep -c JBOD"
+	[[ $jbod != 0 ]] && display -Ee "Some disks are in JBOD mode"
+	
+	end_function
+}
+
+# Function for validating address and netmask 
+############################################
+
+function valid_ip()
+{
+	ip=$1
+	ipv=$2
+	prefix=$3
+
+# For netmask
+
+	if [[ $prefix = 1 ]]; then
+		if [[ $ipv = 6 ]]; then
+			[[ $ip -gt 128 ]] && echo 1 || echo 0
+		else
+			[[ $ip -gt 32 ]] && echo 1 || echo 0
+		fi
+		return
+	fi
+
+# For ip
+	
+	[[ $ipv = 4 ]] && n= || n=6
+	echo "import socket;socket.inet_pton(socket.AF_INET$n, '$ip')" | python
+	echo $?
+}
+
+# Function for getting address and netmask 
+############################################
+
+function set_address()
+{
+	para_fun_l $*; start_function set_address 
+
+	define_var -Ee name "$1"
+	define_var -Ee ip_name $2
+	
+	var -Ee ipv "echo $1 | awk '{print \$NF}' | sed 's/ipv//'"
+	var -N ip "eval \"echo \$$ip_name\""
+
+	define_var_if_else -Ee maskFlag "`echo $name | grep -c Prefix` = 0" "0" "1"
+
+	define_var -Ee prompt "Please Enter $name"
+	define_var -Ee prompt_error "Invalid $name, Please enter a valid $name"
+	
+	while true; do
+		run_com -Ee "cat /dev/null > $whiptail"
+
+		whiptail  --title "VM: '$VM_NAME'" --output-fd 4 --inputbox "$prompt" 10 65 $ip
+		
+		var -N addr "cat $whiptail"
+		if [[ -n $addr ]]; then
+			if [[ $ip_name = PREFIX ]]; then
+				[[ X`echo $addr | tr -d '[0-9]'` = X ]] && [[ `valid_ip $addr $ipv $maskFlag` = 0 ]] && break
+			else
+				[[ `valid_ip $addr $ipv $maskFlag` = 0 ]] && break
+			fi
+		fi
+		prompt=$prompt_error
+	done
+	run_com -Ee "export $ip_name=$addr"
+	add_line_2_file -Ee $confirmation "$ip_name: $addr"
+
+	if [[ $ip_name = PREFIX ]]; then
+		var -Ee NETMASK "cidr2mask $PREFIX"
+		add_line_2_file -Ee $confirmation "NETMASK: $NETMASK"
+		echo_log "NETMASK: $NETMASK"
+	else
+		echo_log "$ip_name=$addr"
+	fi
+	
+	end_function
+}
+
+# Function for getting NIC interfaces list 
+############################################
+
+function create_nics_file()
+{
+	para_fun_l $*; start_function create_nics_file "Create file '$temp_nics' for NIC's\nPlease wait 20 sec ..."
+
+	if [[ "X$1" = "Xbond0" ]]; then
+	
+		check_var -Ee MGMT_INTERFACES
+
+		reset_var -Ee mgmt_interfaces		
+		var -Ee mgmt_interfaces "echo $MGMT_INTERFACES | sed -e 's/,/|/g' -e 's/^/|/'"
+	fi
+
+	run_com -N "rm -f $temp_nics"
+	run_com -Ee "sleep 20"
+	var -Ee list_nic "ls -1 /sys/class/net | egrep -v \"idrac|vir|fpn0|lo|bonding_masters|bond0|mac|vnet$mgmt_interfaces\" | tr '\n' ' '"
+
+	for nic in $list_nic; do
+		var -Ee link "ethtool $nic | grep  'Link detected:' | tr -d [:blank:]"
+		var -Ee numa "cat /sys/class/net/$nic/device/numa_node | tr -d [:blank:]"
+		add_line_2_file -Ee $temp_nics "$nic NUMA_${numa}_$link 0" 
+	done
+
+	show_file -Ees $temp_nics "NIC's list file"
+
+	[[ -s $temp_nics ]] || display -Ee "No data nic card on host"
+	
+	end_function
+}
+
+# Function for updating env file
+############################################
+
+# Function for updating env file
+############################################
+
+function update_env_file()
+{
+	#para_fun_l $*; start_function update_env_file "Update '$env_file'"
+
+	exe_file=
+	if [[ -e $temp_env ]]; then
+		exe_file=$temp_env
+	elif [[ -e $env_file ]]; then
+		exe_file=$env_file
+	fi
+
+	if [[ -n "$2" ]]; then
+		condition="$1"
+		shift
+		eval "[[ $condition ]]" 1>>$LOG 2>&1
+ 		result_condition=$?
+
+		if [[ $result_condition != 0 ]]; then
+			echo_log "Will not update env file with '$1'"
+			end_function; return
+		fi
+	fi
+	name="$1"
+	name_and_value_num=`echo $name | grep -c '='`
+	if [[ $name_and_value_num = 1 ]]; then
+		name_and_value=$name
+		name=`echo $name_and_value | awk -F'=' '{print $1}'`
+		[[ -z $name ]] && display -Ee "No name for parameter"
+		value=`echo $name_and_value | awk -F'=' '{print $2}'`
+	else
+		eval "value=\$$name"
+	fi
+
+	num_lines=`grep -c "^$name=" $exe_file`
+	[[ -z $value ]] && display -Ee "No value to variable '$name'"
+
+	echo_log -ls "** $name='$value'"
+
+	case $num_lines in
+		0)	echo "$name=$value" >> $exe_file ;;
+		1)	sed -i "s!^$name=.*!$name=$value!" $exe_file ;;
+		*) 	display -Ee "String '$name' appeares more then one time" ;;
+	esac
+
+	export $name=$value
+
+	#end_function
+}
+
+function remove_from_env_file()
+{
+	#para_fun_l $*; start_function remove_from_env_file "Remove variable from '$env_file'"
+
+	exe_file=
+	if [[ -e $temp_env ]]; then
+		exe_file=$temp_env
+	elif [[ -e $env_file ]]; then
+		exe_file=$env_file
+	fi
+
+	name="$1"
+	
+	echo_log -l "-- $name"
+
+	sed -i '/^$name=/d' $exe_file
+	unset $name >> $LOG 2>&1
+	sed -i "/^$name=/d" $exe_file
+	[[ `grep -c "^$name=" $exe_file` = 1 ]] && display -Ee "While removing variable '$name' from '$exe_file'"
+
+	#end_function
+}
+
+# Function for checking before run deploy-*
+############################################
+
+check_error_before_continue()
+{
+	para_fun_l $*; start_function check_error_before_continue "Check before continue"
+
+	show_var -Ee last_error_exit
+	
+	if [[ $last_error_exit = 1 ]]; then
+		display -Efj "Error has been found before this section\nPlease check error log '$LOG' before continue"
+		
+		run_com -Ee "touch $exitError"
+
+		ask4only_yes_or_exit_error
+
+		run_com -Ee "rm -f $exitError"
+	fi
+
+	end_function
+}
+
+# Function for checking install section
+############################################
+
+check_install_section()
+{
+	para_fun_l $*; start_function check_install_section "Check install section"
+	
+	define_var -Ee deploy_script "$1"
+	var -Ee deploy_script "basename $deploy_script | sed 's!./!!'"
+	run_com -Ee "export deploy_script=$deploy_script"
+
+	define_var -Ee exist_fileFlag "/root/.${deploy_script}Flag"
+
+	run_com -N "ls -l $exist_fileFlag"
+	define_var_if_else -Ee exist "-e $exist_fileFlag" "1" "0"
+	
+	if [[ $exist = 1 ]]; then
+		display -Wfj "Script '$deploy_script' has been run before"
+		ask4only_yes_or_exit_error
+	fi
+	
+	if [[ $deploy_script = deploy-grub.sh ]]; then
+		run_com -N "ls -l /root/.deploy-host.shFlag"
+		if [[ ! -e /root/.deploy-host.shFlag ]]; then
+			display -Eej "Befor runing 'deploy-grub.sh' you need to run 'deploy-host.sh' first"
+		fi
+	fi
+	
+	if [[ $deploy_script = deploy-guest.sh ]]; then
+		run_com -N "ls -l /root/.deploy-grub.shFlag"
+		if [[ ! -e /root/.deploy-grub.shFlag ]]; then
+			display -Eej "Befor runing 'deploy-guest.sh' you need to run 'deploy-grub.sh' first"
+		fi
+	fi
+	
+	echo_log "\n############### Run script '$deploy_script'"
+	echo_log "############################################################\n"
+
+	end_function
+}
+
+# Function for checking running script
+############################################
+
+touch_exit_deploy()
+{
+	para_fun_l $*; start_function touch_exit_deploy "Mark running result"
+	
+	define_var -Ee deploy_script "$1"
+	var -Ee deploy_script "basename $deploy_script"
+
+	define_var -Ee exist_fileFlag "/root/.${deploy_script}Flag"
+
+	run_com -Ee "touch /root/.${deploy_script}Flag"
+
+	echo_log "\n############### End of script '$deploy_script'"
+	echo_log "############################################################\n"
+	end_function
+}
