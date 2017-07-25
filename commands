@@ -1,1 +1,7 @@
 Command for running in Linux
+
+awk
+============================================================================
+Remove column
+#  awk -F"|" '{ OFS="|"; $3=""; print }' in.txt
+#  awk '{  $8=""; $9=""; print }' /tmp/p
