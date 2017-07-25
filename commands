@@ -11,11 +11,9 @@ Subsplit
 # ifconfig -a | grep "192\.168\.[0-9]\." | awk '{ split($2,a,":"); print a[2]; }'
 
 Subsplit
-
 # awk '/Slart/{if (x)print x;x="";}{x=(!x)?$0:x" -"$0;}END{print x;}'
 
 Subsplit
-
 # echo kuku dev=\'sdz\' | awk '{ split($2,a,"'"'"'"); print a[2]; }'
 
 fdisk.sh 
