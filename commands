@@ -5,3 +5,21 @@ awk
 Remove column
 #  awk -F"|" '{ OFS="|"; $3=""; print }' in.txt
 #  awk '{  $8=""; $9=""; print }' /tmp/p
+
+Subsplit
+# echo 11111:22222 33333:44444  | awk '{ split($1,a,":"); print a[2]; }'
+# ifconfig -a | grep "192\.168\.[0-9]\." | awk '{ split($2,a,":"); print a[2]; }'
+
+
+Subsplit
+
+# awk '/Slart/{if (x)print x;x="";}{x=(!x)?$0:x" -"$0;}END{print x;}'
+
+Subsplit
+
+# echo kuku dev=\'sdz\' | awk '{ split($2,a,"'"'"'"); print a[2]; }'
+
+fdisk.sh 
+# /sbin/fdisk -l 2>/dev/null|awk '$4==8001 { cmd_line = sprintf("head -c 14 %s", $1); e); print "    ", $1}' 
+Output spertore
+# echo "1 2 3 4 5" | awk  -v OFS=':' '{print $1,$2,$3}' 
