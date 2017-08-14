@@ -1,0 +1,3 @@
+Clonzilla
+==================================================================
+/usr/sbin/ocs-sr --nogui -e1 auto -t -c -r -k -p choose restoreparts $image sda2
