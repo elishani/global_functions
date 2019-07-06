@@ -1,7 +1,4 @@
 
-PANG_VERSION=
-ISO_VERSION=
-mes_box="${ISO_VERSION}-$PANG_VERSION"
 
 #F Common parameters in all functions
 #F W   WARNING
