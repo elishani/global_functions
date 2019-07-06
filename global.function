@@ -138,8 +138,8 @@ _function_header_file=/tmp/function_header_file.$$
 [ "X$BASE" = "X" ] && BASE=$0
 _scriptName=`basename $BASE`
 
-temp_env=/tmp/skybox.conf
-env_file=/root/skybox.conf
+temp_env=/tmp/KUKU.conf
+env_file=/root/KUKU.conf
 temp_file=/tmp/temp_f
 nic_dir=/etc/sysconfig/network-scripts
 temp=/tmp/temp_file_0_
@@ -4454,7 +4454,7 @@ function machine_info()
 	add_line_2_file -Ee $env_file "TOTAL_MEMORY=$TOTAL_MEMORY"
 	add_line_2_file -Ee $env_file "TOTAL_CORES=$TOTAL_CORES"
 	add_line_2_file -Ee $env_file "CENTOS_VER=$CENTOS_VER"
-	add_line_2_file -Ee $env_file "MACHINE_TYPE=SKYBOX"
+	add_line_2_file -Ee $env_file "MACHINE_TYPE=KUKU"
 	add_line_2_file -Ee $env_file "# Constant parametres"
 	add_line_2_file -Ee $env_file "SUPPORTED_CENTOS_VER=7"
 	
